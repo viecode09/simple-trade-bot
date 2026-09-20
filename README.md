@@ -27,8 +27,18 @@ node src/index.js serve
 ```
 
 Endpoint:
+- `GET /dashboard` — dashboard web (status + order manual)
 - `POST /webhook` — terima sinyal
 - `GET /health` — cek server hidup
+
+## Dashboard
+
+Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** di halaman (harus sama dengan `WEBHOOK_SECRET`), lalu:
+- **Muat saldo** — saldo spot/futures per profile.
+- **Muat posisi** — posisi futures terbuka.
+- **Order manual** — form buy/sell/close tanpa perlu TradingView.
+
+Dashboard memanggil API internal (`/api/meta`, `/api/balance`, `/api/positions`, `/api/order`) yang semuanya butuh secret (`x-webhook-secret`). Tanpa secret, data tidak bisa diakses.
 
 ## Format alert TradingView
 

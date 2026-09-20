@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>simple-trade-bot</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #0d1117; color: #e6edf3; font-size: 14px;
+  }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h3 { margin: 20px 0 8px; font-size: 13px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  label { display: flex; flex-direction: column; gap: 4px; color: #8b949e; font-size: 12px; }
+  input, select {
+    background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 10px; font: inherit;
+  }
+  button {
+    background: #238636; color: #fff; border: 1px solid #2ea043; border-radius: 6px;
+    padding: 9px 14px; font: inherit; cursor: pointer;
+  }
+  button.ghost { background: #21262d; border-color: #30363d; }
+  button:hover { filter: brightness(1.15); }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 400; }
+  pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px; overflow: auto; white-space: pre-wrap; }
+  .msg { margin-left: 10px; color: #8b949e; }
+  .ok { color: #3fb950; }
+  .err { color: #f85149; }
+</style>
+</head>
+<body>
+  <h1>simple-trade-bot</h1>
+
+  <section class="card">
+    <div class="row">
+      <label style="flex:1">Webhook secret
+        <input id="secret" type="password" placeholder="WEBHOOK_SECRET">
+      </label>
+      <button id="save">Simpan</button>
+      <span id="authmsg" class="msg"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <label>Profile <select id="profile"></select></label>
+      <label>Market (saldo) <select id="balMarket"><option>spot</option><option>future</option></select></label>
+      <button id="loadBal" class="ghost">Muat saldo</button>
+      <button id="loadPos" class="ghost">Muat posisi</button>
+    </div>
+    <div id="status" class="msg"></div>
+    <h3>Saldo</h3>
+    <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
+    <h3>Posisi futures</h3>
+    <table id="posTable"><thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="card">
+    <h3>Order manual</h3>
+    <div class="grid">
+      <label>Market <select id="oMarket"><option>spot</option><option>future</option></select></label>
+      <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
+      <label>Action <select id="oAction"><option>long</option><option>short</option><option>close</option></select></label>
+      <label>Amount <input id="oAmount" type="number" step="any" placeholder="50"></label>
+      <label>Amount type <select id="oAmountType"><option>quote</option><option>base</option></select></label>
+      <label>Price (opsional) <input id="oPrice" type="number" step="any" placeholder="market"></label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="send">Kirim order</button>
+      <span id="ordermsg" class="msg"></span>
+    </div>
+    <pre id="result">-</pre>
+  </section>
+
+<script>
+const $ = id => document.getElementById(id);
+const secretInput = $('secret');
+
+secretInput.value = localStorage.getItem('stb_secret') || '';
+
+async function api(path, options = {}) {
+  const headers = Object.assign({ 'x-webhook-secret': secretInput.value }, options.headers || {});
+  const res = await fetch(path, Object.assign({}, options, { headers }));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function setMsg(el, text, ok = true) {
+  el.textContent = text;
+  el.className = 'msg ' + (ok ? 'ok' : 'err');
+}
+
+$('save').onclick = () => {
+  localStorage.setItem('stb_secret', secretInput.value);
+  setMsg($('authmsg'), 'secret disimpan');
+  loadMeta();
+};
+
+function fill(select, values) {
+  select.innerHTML = values.map(v => `<option>${v}</option>`).join('');
+}
+
+async function loadMeta() {
+  try {
+    const meta = await api('/api/meta');
+    fill($('profile'), meta.profiles.length ? meta.profiles : [meta.defaultProfile]);
+    if (meta.defaultProfile) $('profile').value = meta.defaultProfile;
+    $('tickers').innerHTML = meta.tickers.map(t => `<option value="${t}">`).join('');
+    setMsg($('authmsg'), 'secret valid', true);
+  } catch (e) {
+    setMsg($('authmsg'), e.message, false);
+  }
+}
+
+function cells(row) { return row.map(v => `<td>${v ?? ''}</td>`).join(''); }
+
+$('loadBal').onclick = async () => {
+  setMsg($('status'), 'memuat...');
+  try {
+    const rows = await api('/api/balance?profile=' + encodeURIComponent($('profile').value) + '&market=' + $('balMarket').value);
+    $('balTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.currency, r.total, r.free, r.used])}</tr>`).join('') || '<tr><td colspan="4">kosong</td></tr>';
+    setMsg($('status'), rows.length + ' aset');
+  } catch (e) { setMsg($('status'), e.message, false); }
+};
+
+$('loadPos').onclick = async () => {
+  setMsg($('status'), 'memuat...');
+  try {
+    const rows = await api('/api/positions?profile=' + encodeURIComponent($('profile').value));
+    $('posTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.symbol, r.side, r.contracts, r.entryPrice, r.markPrice, r.unrealizedPnl, r.leverage])}</tr>`).join('') || '<tr><td colspan="7">kosong</td></tr>';
+    setMsg($('status'), rows.length + ' posisi');
+  } catch (e) { setMsg($('status'), e.message, false); }
+};
+
+$('send').onclick = async () => {
+  setMsg($('ordermsg'), 'mengirim...');
+  $('result').textContent = '-';
+  const body = {
+    profile: $('profile').value,
+    market: $('oMarket').value,
+    ticker: $('oTicker').value,
+    action: $('oAction').value,
+    amount: $('oAmount').value ? Number($('oAmount').value) : undefined,
+    amountType: $('oAmountType').value,
+    price: $('oPrice').value ? Number($('oPrice').value) : undefined
+  };
+  try {
+    const data = await api('/api/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    $('result').textContent = JSON.stringify(data, null, 2);
+    setMsg($('ordermsg'), 'order terkirim');
+  } catch (e) {
+    $('result').textContent = e.message;
+    setMsg($('ordermsg'), e.message, false);
+  }
+};
+
+if (secretInput.value) loadMeta();
+</script>
+</body>
+</html>

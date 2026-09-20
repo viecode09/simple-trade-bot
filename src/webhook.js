@@ -1,13 +1,21 @@
 import http from 'node:http';
+import fs from 'node:fs';
 import { loadConfig } from './config.js';
 import { logger } from './logger.js';
-import { executeAction } from './trader.js';
+import { executeAction, getBalance, getPositions } from './trader.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
+
+const DASHBOARD_HTML = fs.readFileSync(new URL('./dashboard.html', import.meta.url), 'utf8');
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(body);
+}
+
+function sendHtml(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(body);
 }
 
@@ -50,6 +58,27 @@ function parsePayload(body) {
   }
 }
 
+function providedSecret(req, url, payload) {
+  return payload?.secret || req.headers['x-webhook-secret'] || url.searchParams.get('secret');
+}
+
+function secretValid(config, req, url, payload) {
+  const expected = config.webhook?.secret;
+  if (!expected) {
+    return true;
+  }
+  return providedSecret(req, url, payload) === expected;
+}
+
+function buildMeta(config) {
+  return {
+    defaultProfile: config.defaultProfile,
+    profiles: (config.profiles || []).map(profile => profile.id),
+    tickers: Object.keys(config.symbolMap || {}),
+    markets: ['spot', 'future']
+  };
+}
+
 export function startWebhookServer() {
   const config = loadConfig();
   const host = config.server?.host || '0.0.0.0';
@@ -60,15 +89,8 @@ export function startWebhookServer() {
   }
 
   const server = http.createServer(async (req, res) => {
-    if (req.method === 'GET' && req.url === '/health') {
-      sendJson(res, 200, { ok: true });
-      return;
-    }
-
-    if (req.method !== 'POST' || !(req.url || '').startsWith('/webhook')) {
-      sendJson(res, 404, { ok: false, error: 'not found' });
-      return;
-    }
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const path = url.pathname;
 
     try {
       if (!ipAllowed(config, clientIp(req))) {
@@ -76,30 +98,72 @@ export function startWebhookServer() {
         return;
       }
 
-      const payload = parsePayload(await readBody(req));
-      if (!payload) {
-        sendJson(res, 400, { ok: false, error: 'invalid JSON body' });
+      if (req.method === 'GET' && (path === '/' || path === '/dashboard')) {
+        sendHtml(res, 200, DASHBOARD_HTML);
         return;
       }
 
-      const expectedSecret = config.webhook?.secret;
-      const secret = payload.secret || req.headers['x-webhook-secret'];
-      if (expectedSecret && secret !== expectedSecret) {
-        sendJson(res, 401, { ok: false, error: 'invalid secret' });
+      if (req.method === 'GET' && path === '/health') {
+        sendJson(res, 200, { ok: true });
         return;
       }
 
-      const result = await executeAction({
-        profileId: payload.profile,
-        market: payload.market,
-        ticker: payload.ticker || payload.symbol,
-        action: payload.action || payload.side,
-        amount: payload.amount,
-        amountType: payload.amountType,
-        price: payload.price
-      });
+      if (req.method === 'GET' && path === '/api/meta') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        sendJson(res, 200, { ok: true, ...buildMeta(config) });
+        return;
+      }
 
-      sendJson(res, 200, { ok: true, ...result });
+      if (req.method === 'GET' && path === '/api/balance') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const balances = await getBalance(url.searchParams.get('profile'), url.searchParams.get('market') || 'spot');
+        sendJson(res, 200, { ok: true, balances });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/api/positions') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const positions = await getPositions(url.searchParams.get('profile'));
+        sendJson(res, 200, { ok: true, positions });
+        return;
+      }
+
+      const isOrderRoute = path === '/webhook' || path === '/api/order';
+      if (req.method === 'POST' && isOrderRoute) {
+        const payload = parsePayload(await readBody(req));
+        if (!payload) {
+          sendJson(res, 400, { ok: false, error: 'invalid JSON body' });
+          return;
+        }
+        if (!secretValid(config, req, url, payload)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+
+        const result = await executeAction({
+          profileId: payload.profile,
+          market: payload.market,
+          ticker: payload.ticker || payload.symbol,
+          action: payload.action || payload.side,
+          amount: payload.amount,
+          amountType: payload.amountType,
+          price: payload.price
+        });
+
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, error: 'not found' });
     } catch (e) {
       logger.error(`Webhook error: ${e.message || e}`);
       sendJson(res, 400, { ok: false, error: e.message || String(e) });
@@ -107,7 +171,7 @@ export function startWebhookServer() {
   });
 
   server.listen(port, host, () => {
-    logger.info(`Webhook listening on http://${host}:${port}/webhook (health: /health)`);
+    logger.info(`Webhook listening on http://${host}:${port}/webhook (dashboard: /dashboard, health: /health)`);
   });
 
   const shutdown = () => {
