@@ -126,7 +126,8 @@ function cells(row) { return row.map(v => `<td>${v ?? ''}</td>`).join(''); }
 $('loadBal').onclick = async () => {
   setMsg($('status'), 'memuat...');
   try {
-    const rows = await api('/api/balance?profile=' + encodeURIComponent($('profile').value) + '&market=' + $('balMarket').value);
+    const data = await api('/api/balance?profile=' + encodeURIComponent($('profile').value) + '&market=' + $('balMarket').value);
+    const rows = data.balances;
     $('balTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.currency, r.total, r.free, r.used])}</tr>`).join('') || '<tr><td colspan="4">kosong</td></tr>';
     setMsg($('status'), rows.length + ' aset');
   } catch (e) { setMsg($('status'), e.message, false); }
@@ -135,7 +136,8 @@ $('loadBal').onclick = async () => {
 $('loadPos').onclick = async () => {
   setMsg($('status'), 'memuat...');
   try {
-    const rows = await api('/api/positions?profile=' + encodeURIComponent($('profile').value));
+    const data = await api('/api/positions?profile=' + encodeURIComponent($('profile').value));
+    const rows = data.positions;
     $('posTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.symbol, r.side, r.contracts, r.entryPrice, r.markPrice, r.unrealizedPnl, r.leverage])}</tr>`).join('') || '<tr><td colspan="7">kosong</td></tr>';
     setMsg($('status'), rows.length + ' posisi');
   } catch (e) { setMsg($('status'), e.message, false); }
