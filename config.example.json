@@ -1,0 +1,29 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8787
+  },
+  "webhook": {
+    "secret": "env:WEBHOOK_SECRET",
+    "ipAllowlist": []
+  },
+  "defaultProfile": "binance1",
+  "profiles": [
+    {
+      "id": "binance1",
+      "exchange": "binance",
+      "apiKey": "env:BINANCE_API_KEY",
+      "secret": "env:BINANCE_SECRET",
+      "password": "",
+      "leverage": 5,
+      "marginMode": "isolated",
+      "allowSpot": true,
+      "allowFutures": true
+    }
+  ],
+  "symbolMap": {
+    "BTCUSDT": { "symbol": "BTC/USDT", "futureSymbol": "BTC/USDT:USDT" },
+    "ETHUSDT": { "symbol": "ETH/USDT", "futureSymbol": "ETH/USDT:USDT" },
+    "SOLUSDT": { "symbol": "SOL/USDT", "futureSymbol": "SOL/USDT:USDT" }
+  }
+}

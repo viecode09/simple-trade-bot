@@ -1,0 +1,19 @@
+{
+  "name": "simple-trade-bot",
+  "version": "1.0.0",
+  "description": "Lightweight spot & futures auto-order bot with TradingView webhook support",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js serve",
+    "serve": "node src/index.js serve",
+    "balance": "node src/index.js balance"
+  },
+  "dependencies": {
+    "ccxt": "^4.5.70",
+    "dotenv": "^16.4.5"
+  }
+}
