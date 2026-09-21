@@ -1,7 +1,11 @@
 {
   "server": {
     "host": "0.0.0.0",
-    "port": 8787
+    "port": 8787,
+    "auth": {
+      "username": "env:AUTH_USER",
+      "password": "env:AUTH_PASS"
+    }
   },
   "webhook": {
     "secret": "env:WEBHOOK_SECRET",

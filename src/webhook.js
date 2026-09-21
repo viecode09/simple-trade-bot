@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { loadConfig } from './config.js';
 import { logger } from './logger.js';
 import { executeAction, getBalance, getPositions, getOpenOrders, cancelOrder, resolveSymbol } from './trader.js';
@@ -74,6 +75,33 @@ function secretValid(config, req, url, payload) {
   return providedSecret(req, url, payload) === expected;
 }
 
+function safeEqual(a, b) {
+  const bufferA = Buffer.from(String(a));
+  const bufferB = Buffer.from(String(b));
+  if (bufferA.length !== bufferB.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(bufferA, bufferB);
+}
+
+function basicAuthValid(config, req) {
+  const auth = config.server?.auth;
+  const username = auth?.username;
+  const password = auth?.password;
+  if (!username || !password) {
+    return true;
+  }
+  const header = req.headers['authorization'];
+  if (typeof header !== 'string' || !header.startsWith('Basic ')) {
+    return false;
+  }
+  const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+  const index = decoded.indexOf(':');
+  const user = index >= 0 ? decoded.slice(0, index) : decoded;
+  const pass = index >= 0 ? decoded.slice(index + 1) : '';
+  return safeEqual(user, username) && safeEqual(pass, password);
+}
+
 function buildMeta(config) {
   const configured = Object.keys(config.symbolMap || {});
   const custom = listPairs().map(pair => pair.ticker);
@@ -132,6 +160,16 @@ export function startWebhookServer() {
     try {
       if (!ipAllowed(config, clientIp(req))) {
         sendJson(res, 403, { ok: false, error: 'ip not allowed' });
+        return;
+      }
+
+      const basicExempt = path === '/health' || path === '/webhook';
+      if (!basicExempt && !basicAuthValid(config, req)) {
+        res.writeHead(401, {
+          'WWW-Authenticate': 'Basic realm="simple-trade-bot", charset="UTF-8"',
+          'Content-Type': 'application/json'
+        });
+        res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
         return;
       }
 

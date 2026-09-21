@@ -33,7 +33,7 @@ Endpoint:
 
 ## Dashboard
 
-Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** (ikon Settings, atau modal setup saat pertama kali) — harus sama dengan `WEBHOOK_SECRET`.
+Buka `http://localhost:8787/dashboard` (atau `/`). Jika `server.auth` diisi, browser meminta **login HTTP Basic** dulu. Lalu isi **Webhook secret** (ikon Settings, atau modal setup saat pertama kali) — harus sama dengan `WEBHOOK_SECRET`.
 
 Layout trading terminal (dark, minimalis):
 - **Header** — logo, status bot (Running/Stopped), toggle Spot/Futures, Settings, avatar profile.
@@ -144,7 +144,7 @@ Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dip`
 ## Konfigurasi
 
 `config.json`:
-- `server` — host/port webhook.
+- `server` — host/port webhook, dan `auth` (`username`/`password`, bisa `env:...`) untuk **HTTP Basic Auth** dashboard & API. Contoh: `{"auth":{"username":"aink","password":"asup"}}`.
 - `webhook.secret` — secret validasi (bisa `env:NAMA_ENV`).
 - `webhook.ipAllowlist` — opsional; batasi IP pengirim. Kosong = semua diizinkan.
 - `defaultProfile` — profile default bila payload tidak menyebut `profile`.
@@ -204,6 +204,7 @@ Catatan:
 
 ## Keamanan
 
+- **HTTP Basic Auth**: set `server.auth` (`username`/`password`) untuk melindungi dashboard (`/`, `/dashboard`) dan semua endpoint `/api/*`. Browser akan meminta login; `/health` dan `/webhook` dikecualikan (`/webhook` tetap divalidasi `webhook.secret` agar TradingView tetap bisa kirim alert).
 - Selalu set `webhook.secret`.
 - Webhook default listen di `0.0.0.0`; batasi `server.host` atau gunakan reverse proxy + HTTPS.
 - API key sebaiknya hanya izinkan trading, **tanpa** izin withdraw.
