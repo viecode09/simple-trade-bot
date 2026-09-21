@@ -80,6 +80,13 @@ function buildMeta(config) {
   return {
     defaultProfile: config.defaultProfile,
     profiles: (config.profiles || []).map(profile => profile.id),
+    profileSettings: Object.fromEntries((config.profiles || []).map(profile => [profile.id, {
+      exchange: profile.exchange,
+      leverage: profile.leverage ?? null,
+      marginMode: profile.marginMode ?? null,
+      allowSpot: profile.allowSpot !== false,
+      allowFutures: profile.allowFutures !== false
+    }])),
     tickers: [...new Set([...configured, ...custom])],
     configuredTickers: configured,
     customTickers: custom,

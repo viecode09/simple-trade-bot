@@ -128,7 +128,7 @@
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
 
   /* Balance summary */
-  .balance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-bottom: 16px; overflow: hidden; }
+  .balance { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-bottom: 16px; overflow: hidden; border-radius: var(--radius); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
   .balance .cell { background: var(--panel); padding: 14px 18px; }
   .balance .cell .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
   .balance .cell .v { font-size: 20px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -215,16 +215,42 @@
   .toast { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 8px; padding: 10px 14px; font-size: 12px; max-width: 340px; }
   .toast.ok { border-left-color: var(--green); } .toast.err { border-left-color: var(--red); }
 
+  .menu-btn { display: none; }
+  .backdrop { position: fixed; inset: 64px 0 0 0; background: rgba(0,0,0,.55); z-index: 39; }
+
   @media (max-width: 1150px) {
     body { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
-    .sidebar { display: none; }
+    .menu-btn { display: grid; }
+    .sidebar {
+      position: fixed; top: 64px; bottom: 0; left: 0; width: 280px;
+      transform: translateX(-100%); transition: transform .2s ease; z-index: 40;
+      box-shadow: 6px 0 24px rgba(0,0,0,.4);
+    }
+    .sidebar.open { transform: translateX(0); }
     .workspace { grid-template-columns: 1fr; }
-    .balance { grid-template-columns: 1fr; }
+    .main { padding: 12px 12px 32px; }
+    .pair-metrics { margin-left: 0; }
+    #chart { min-height: 300px; }
+    .balance .cell { padding: 10px 12px; }
+    .balance .cell .v { font-size: 15px; margin-top: 3px; }
+    .balance .cell .k { font-size: 9px; }
+    .balance .cell .s { font-size: 10px; }
+  }
+
+  @media (max-width: 560px) {
+    .header { gap: 10px; padding: 0 12px; }
+    .brand small { display: none; }
+    #botStatusText { display: none; }
+    .avatar { display: none; }
+    .pair-head { gap: 10px; }
   }
 </style>
 </head>
 <body>
   <header class="header">
+    <button class="icon-btn menu-btn" id="menuBtn" title="Favorites">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
     <div class="brand">
       <span class="logo">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l3 3-3 3-3-3 3-3zm-6 6l3 3-3 3-3-3 3-3zm12 0l3 3-3 3-3-3 3-3zM7.5 15l4.5 4.5L16.5 15 12 19.5 7.5 15zM12 9.5l2.5 2.5L12 14.5 9.5 12 12 9.5z"/></svg>
@@ -319,7 +345,10 @@
             <div class="field"><label>Market</label><select id="moMarket"><option value="spot">Spot</option><option value="future" selected>Futures</option></select></div>
             <div class="field"><label>Action</label><select id="moAction"><option value="long">Long / Buy</option><option value="short">Short / Sell</option><option value="close">Close</option><option value="stop">Stop</option></select></div>
           </div>
-          <div class="field"><label>Ticker</label><input id="moTicker" placeholder="BTCUSDT"></div>
+          <div class="grid2">
+            <div class="field"><label>Ticker</label><input id="moTicker" placeholder="BTCUSDT"></div>
+            <div class="field"><label>Leverage (Futures)</label><input id="moLeverage" type="number" min="1" step="1" placeholder="5x"></div>
+          </div>
           <div class="grid2">
             <div class="field"><label>Amount</label><input id="moAmount" type="number" step="any" placeholder="50"></div>
             <div class="field"><label>Amount Type</label><select id="moAmountType"><option value="quote">Quote (USDT)</option><option value="base">Base</option></select></div>
@@ -355,6 +384,7 @@
     </section>
   </main>
 
+  <div id="sidebarBackdrop" class="backdrop hidden"></div>
   <div id="modalRoot" class="overlay hidden"><div class="modal" id="modalBox"></div></div>
   <div id="toasts"></div>
 
@@ -370,6 +400,7 @@ const state = {
   meta: {},
   favorites: [],
   custom: new Set(),
+  leverage: null,
   chart: null,
   series: {},
   poll: null,
@@ -527,7 +558,25 @@ async function selectPair(ticker) {
   $('pairStar').style.color = state.custom.has(ticker) || state.favorites.some(f => f.ticker === ticker) ? 'var(--yellow)' : 'var(--muted)';
   $('moTicker').value = ticker;
   $('moMarket').value = state.market;
+  syncLeverage();
+  closeSidebar();
   await loadPair();
+}
+
+function openSidebar() {
+  document.querySelector('.sidebar').classList.add('open');
+  $('sidebarBackdrop').classList.remove('hidden');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  $('sidebarBackdrop').classList.add('hidden');
+}
+function syncLeverage() {
+  const el = $('moLeverage');
+  if (!el) return;
+  el.disabled = state.market !== 'future';
+  if (state.leverage != null) el.value = state.leverage;
+  el.placeholder = state.market === 'future' ? (state.leverage ? state.leverage + 'x' : '5x') : 'Spot';
 }
 
 function updatePairHeader(data) {
@@ -824,7 +873,7 @@ $('posRows').addEventListener('click', e => {
   const view = e.target.closest('[data-view]');
   if (view) { selectPair(baseOf(view.dataset.view) + 'USDT'); return; }
   const close = e.target.closest('[data-close]');
-  if (close) confirmTrade('close', pairLabel(close.dataset.close), close.dataset.side);
+  if (close) confirmTrade('close', pairLabel(close.dataset.close), close.dataset.side, close.dataset.close);
 });
 
 /* ---------- Modals ---------- */
@@ -883,27 +932,69 @@ $('modalRoot').addEventListener('click', async e => {
   } catch (err) { toast(err.message, 'err'); }
 });
 
-function confirmTrade(side, pair, posSide) {
+function confirmTrade(side, pair, posSide, execTicker) {
   const rec = state.lastRec || {};
-  const label = side === 'close' ? 'Tutup Posisi' : 'Konfirmasi Order';
+  const lev = state.leverage || ($('moLeverage') && $('moLeverage').value) || null;
+  const levRow = state.market === 'future' ? `<div class="kv"><span class="k">Leverage</span><span class="v">${lev ? lev + 'x' : '-'}</span></div>` : '';
+  const isClose = side === 'close';
+  const action = isClose ? 'close' : (side === 'sell' ? 'short' : 'long');
+  state.pending = { market: state.market, ticker: execTicker || state.ticker, action, amountType: 'quote' };
+  const label = isClose ? 'Tutup Posisi' : 'Konfirmasi Order';
   openModal(`
     <div class="m-head"><h3>${label}</h3><button class="close-x" data-close>×</button></div>
     <div class="m-body">
       <div class="kv"><span class="k">Pair</span><span class="v">${pair}</span></div>
-      <div class="kv"><span class="k">Aksi</span><span class="v">${side === 'close' ? 'CLOSE ' + String(posSide || '').toUpperCase() : rec.signal || '-'}</span></div>
+      <div class="kv"><span class="k">Market</span><span class="v">${state.market.toUpperCase()}</span></div>
+      <div class="kv"><span class="k">Aksi</span><span class="v">${isClose ? 'CLOSE ' + String(posSide || '').toUpperCase() : action.toUpperCase()}</span></div>
+      ${levRow}
       <div class="kv"><span class="k">Entry</span><span class="v">${rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-'}</span></div>
       <div class="kv"><span class="k">Take Profit</span><span class="v up">${rec.tp != null ? fmtPrice(rec.tp) : '-'}</span></div>
       <div class="kv"><span class="k">Stop Loss</span><span class="v down">${rec.sl != null ? fmtPrice(rec.sl) : '-'}</span></div>
-      <div class="field"><label>Amount (USDT)</label><input id="tradeAmount" type="number" value="10"></div>
-      <div class="muted" style="font-size:11px">Mode prototype: order tidak akan dieksekusi ke Binance.</div>
+      ${isClose ? '' : '<div class="field"><label>Amount (USDT)</label><input id="tradeAmount" type="number" value="10"></div>'}
+      <div class="muted" style="font-size:11px">Order akan dikirim ke Binance setelah konfirmasi.</div>
     </div>
     <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="tradeConfirm">Konfirmasi</button></div>`);
 }
-$('modalRoot').addEventListener('click', e => {
-  if (e.target.id === 'tradeConfirm' || e.target.id === 'moConfirm') {
-    closeModal();
-    toast('Prototype: order tidak dieksekusi. Hubungkan eksekusi setelah validasi.', 'ok');
+
+async function executeOrder(body) {
+  try {
+    const data = await api('/api/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const o = data.order || {};
+    toast('Order terkirim: ' + (o.side ? o.side.toUpperCase() + ' ' + (data.symbol || '') : 'OK'), 'ok');
+    loadPositions();
+    loadBalance();
+    if (state.ticker) loadPair();
+  } catch (e) {
+    toast('Gagal order: ' + e.message, 'err');
   }
+}
+
+async function executePending() {
+  const p = state.pending || {};
+  const amountEl = $('tradeAmount');
+  const amount = amountEl && amountEl.value ? Number(amountEl.value) : undefined;
+  closeModal();
+  if (p.action !== 'close' && !amount) { toast('Amount wajib diisi', 'err'); return; }
+  await executeOrder({ profile: state.profile, market: p.market, ticker: p.ticker, action: p.action, amount: p.action === 'close' ? undefined : amount, amountType: p.amountType });
+}
+
+async function executeManual() {
+  const body = {
+    profile: state.profile,
+    market: $('moMarket').value,
+    ticker: $('moTicker').value.trim() || state.ticker,
+    action: $('moAction').value,
+    amount: $('moAmount').value ? Number($('moAmount').value) : undefined,
+    amountType: $('moAmountType').value,
+    price: $('moPrice').value ? Number($('moPrice').value) : undefined,
+    stopPrice: $('moStopPrice').value ? Number($('moStopPrice').value) : undefined
+  };
+  closeModal();
+  await executeOrder(body);
+}
+$('modalRoot').addEventListener('click', async e => {
+  if (e.target.id === 'tradeConfirm') { await executePending(); }
+  else if (e.target.id === 'moConfirm') { await executeManual(); }
 });
 
 $('detailBtn').onclick = async () => {
@@ -934,16 +1025,19 @@ function confirmManual() {
   if (!order.ticker) { toast('Ticker wajib diisi', 'err'); return; }
   if (order.action !== 'close' && order.action !== 'stop' && !order.amount) { toast('Amount wajib untuk long/short', 'err'); return; }
   if (order.action === 'stop' && !order.stopPrice) { toast('Stop price wajib untuk action stop', 'err'); return; }
+  const lev = order.market === 'future' ? ($('moLeverage').value || state.leverage) : null;
+  const levRow = order.market === 'future' ? `<div class="kv"><span class="k">Leverage</span><span class="v">${lev ? lev + 'x' : '-'}</span></div>` : '';
   openModal(`
     <div class="m-head"><h3>Konfirmasi Manual Order</h3><button class="close-x" data-close>×</button></div>
     <div class="m-body">
       <div class="kv"><span class="k">Pair</span><span class="v">${order.ticker}</span></div>
       <div class="kv"><span class="k">Market</span><span class="v">${order.market.toUpperCase()}</span></div>
       <div class="kv"><span class="k">Action</span><span class="v">${order.action.toUpperCase()}</span></div>
+      ${levRow}
       <div class="kv"><span class="k">Amount</span><span class="v">${order.amount || '-'} ${order.amountType}</span></div>
       <div class="kv"><span class="k">Price</span><span class="v">${order.price || 'Market'}</span></div>
       <div class="kv"><span class="k">Stop Price</span><span class="v">${order.stopPrice || '-'}</span></div>
-      <div class="muted" style="font-size:11px">Mode prototype: order tidak dieksekusi ke Binance.</div>
+      <div class="muted" style="font-size:11px">Order akan dikirim ke Binance setelah konfirmasi.</div>
     </div>
     <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="moConfirm">Konfirmasi</button></div>`);
 }
@@ -969,6 +1063,7 @@ $('marketSeg').addEventListener('click', e => {
   document.querySelectorAll('#marketSeg button').forEach(b => b.classList.toggle('active', b === btn));
   state.market = btn.dataset.market;
   $('moMarket').value = state.market;
+  syncLeverage();
   loadFavorites().then(() => { loadBalance(); loadPositions(); loadPair(); });
 });
 $('pairStar').onclick = async () => {
@@ -981,6 +1076,12 @@ $('pairStar').onclick = async () => {
     catch (e) { toast(e.message, 'err'); }
   }
 };
+
+$('menuBtn').onclick = () => {
+  const open = document.querySelector('.sidebar').classList.contains('open');
+  if (open) closeSidebar(); else openSidebar();
+};
+$('sidebarBackdrop').onclick = closeSidebar;
 
 function setStatus(on) {
   $('botStatus').classList.toggle('on', on);
@@ -997,6 +1098,9 @@ async function bootstrap() {
     state.meta = await api('/api/meta');
     state.profile = state.profile || state.meta.defaultProfile;
     $('avatar').textContent = (state.profile || 'B').charAt(0).toUpperCase();
+    const cfg = (state.meta.profileSettings || {})[state.profile] || {};
+    state.leverage = cfg.leverage ?? null;
+    syncLeverage();
     setStatus(true);
     await loadFavorites();
     const first = state.favorites[0] && state.favorites[0].ticker;

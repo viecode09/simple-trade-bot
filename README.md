@@ -39,10 +39,11 @@ Layout trading terminal (dark, minimalis):
 - **Header** — logo, status bot (Running/Stopped), toggle Spot/Futures, Settings, avatar profile.
 - **Sidebar Favorites** (kiri) — daftar pair favorit + harga & perubahan 24 jam, pencarian, tombol **+ Add Favorite**, dan bintang untuk menghapus dari watchlist. Klik pair → seluruh dashboard mengikuti.
 - **Balance Summary** (lebar penuh) — Total Balance, Available Balance, Today's PnL (nilai & %).
-- **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D) + toggle **RSI**, candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir + marker sinyal (MA/dip/RSI). Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
+- **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D) + toggle **RSI**, candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir + marker sinyal (MA/dip/RSI). Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot — modal konfirmasi menampilkan Market & **Leverage** untuk Futures) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
+- **Manual Order** (kolom kanan, di bawah Bot Recommendation) — form Market/Action (Long/Short/Close/Stop), Ticker, Amount, Amount Type, Price, Stop Price, dan **Leverage** (khusus Futures, dari `config.json` profile). Tombol Place Order mengirim order via `/api/order` setelah konfirmasi.
 - **Open Positions** (lebar penuh) — tabel posisi (Pair, Side, Entry, Mark, PnL, **Risk**, **Recommendation**, aksi View/Close) atau empty state. Risk dihitung dari jarak harga mark ke liquidation (atau leverage), Recommendation dari ROE/PnL + level risk (Take Profit / Cut Loss / Cut-Reduce / Hold).
 
-Catatan: tombol **Trade with Bot** dan **Close** hanya menampilkan modal konfirmasi (**prototype — tidak mengeksekusi order** ke Binance).
+Catatan: tombol **Trade with Bot**, **Place Order**, dan **Close** menampilkan modal konfirmasi lalu **mengirim order sungguhan** ke Binance (`POST /api/order`). Pastikan API key aktif & benar sebelum menekan Konfirmasi. Layout responsif: di layar kecil sidebar Favorites jadi drawer (tombol menu di header), dan **Balance Summary sticky** di atas saat scroll.
 
 Endpoint internal (semua butuh secret):
 - `GET /api/meta` — daftar profile, ticker, timeframe, default MA.
