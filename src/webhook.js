@@ -6,6 +6,7 @@ import { executeAction, getBalance, getPositions, resolveSymbol } from './trader
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
 import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
 import { describeError } from './errors.js';
+import { listPairs, addPair, removePair, previewPair } from './watchlist.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -74,10 +75,14 @@ function secretValid(config, req, url, payload) {
 }
 
 function buildMeta(config) {
+  const configured = Object.keys(config.symbolMap || {});
+  const custom = listPairs().map(pair => pair.ticker);
   return {
     defaultProfile: config.defaultProfile,
     profiles: (config.profiles || []).map(profile => profile.id),
-    tickers: Object.keys(config.symbolMap || {}),
+    tickers: [...new Set([...configured, ...custom])],
+    configuredTickers: configured,
+    customTickers: custom,
     markets: ['spot', 'future'],
     timeframes: ['1m', '5m', '15m', '1h', '4h', '1d'],
     maDefaults: MA_DEFAULTS
@@ -139,6 +144,60 @@ export function startWebhookServer() {
           return;
         }
         sendJson(res, 200, { ok: true, ...buildMeta(config) });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/api/tickers') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        sendJson(res, 200, { ok: true, pairs: listPairs() });
+        return;
+      }
+
+      if (req.method === 'POST' && path === '/api/tickers') {
+        const payload = parsePayload(await readBody(req));
+        if (!payload) {
+          sendJson(res, 400, { ok: false, error: 'invalid JSON body' });
+          return;
+        }
+        if (!secretValid(config, req, url, payload)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+
+        const ticker = payload.ticker || payload.pair || payload.symbol;
+        const preview = previewPair(ticker, { symbol: payload.symbol, futureSymbol: payload.futureSymbol });
+
+        let warning = null;
+        try {
+          const profile = getProfile(payload.profile);
+          const market = normalizeMarket(payload.market);
+          if (marketAllowed(profile, market)) {
+            const exchange = getExchange(profile, market, { public: true });
+            await exchange.loadMarkets();
+            const symbol = market === 'future' ? preview.futureSymbol : preview.symbol;
+            if (!exchange.markets[symbol]) {
+              warning = `Pair ${symbol} tidak ditemukan di ${profile.exchange} (${market}); tetap disimpan.`;
+            }
+          }
+        } catch (e) {
+          warning = describeError(e);
+        }
+
+        const pair = addPair(ticker, { symbol: payload.symbol, futureSymbol: payload.futureSymbol });
+        sendJson(res, 200, { ok: true, pair, warning, ...buildMeta(config) });
+        return;
+      }
+
+      if (req.method === 'DELETE' && path === '/api/tickers') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const removed = removePair(url.searchParams.get('ticker'));
+        sendJson(res, 200, { ok: true, removed, ...buildMeta(config) });
         return;
       }
 

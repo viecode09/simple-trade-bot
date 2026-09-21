@@ -1,6 +1,7 @@
 import { logger } from './logger.js';
 import { loadConfig } from './config.js';
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
+import { getPair, deriveSymbols } from './watchlist.js';
 
 function normalizeAction(action) {
   switch (String(action || '').toLowerCase()) {
@@ -26,11 +27,14 @@ export function resolveSymbol(config, ticker, market) {
   if (!ticker) {
     throw new Error('Missing ticker/symbol');
   }
-  if (String(ticker).includes('/')) {
-    return ticker;
+
+  const raw = String(ticker);
+  if (raw.includes('/')) {
+    return raw;
   }
 
-  const entry = config.symbolMap?.[String(ticker).toUpperCase()];
+  const key = raw.toUpperCase();
+  const entry = config.symbolMap?.[key] || getPair(key);
   if (entry) {
     const symbol = market === 'future' ? entry.futureSymbol || entry.symbol : entry.symbol;
     if (symbol) {
@@ -38,7 +42,12 @@ export function resolveSymbol(config, ticker, market) {
     }
   }
 
-  throw new Error(`No symbol mapping for "${ticker}". Add it to symbolMap in config.json.`);
+  const derived = deriveSymbols(key);
+  if (derived) {
+    return market === 'future' ? derived.futureSymbol : derived.symbol;
+  }
+
+  throw new Error(`No symbol mapping for "${ticker}". Tambahkan pair dari dashboard atau symbolMap di config.json.`);
 }
 
 async function fetchPrice(exchange, symbol) {

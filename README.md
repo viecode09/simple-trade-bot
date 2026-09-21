@@ -42,9 +42,13 @@ Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** di hal
 - **Chart** — candlestick dengan overlay MA fast/slow/trend (default 7/25/99), marker sinyal `L`/`S`, dan marker `DIP` (aktifkan checkbox **dip_catcher**), sumber candle dari exchange (ccxt).
 - **Analisa MA** — sinyal (long/short/none), harga, nilai MA, status cross, alasan, dan posisi saat ini.
 - **Rekomendasi aksi (trend market)** — analisa multi-timeframe (5m/15m/1h/4h/1d) memakai MA fast/slow/trend, menampilkan klasifikasi tren tiap timeframe (`Bullish kuat`/`Bullish`/`Bearish`/`Netral`) dan rekomendasi akhir `BUY`/`SELL` (spot) atau `LONG`/`SHORT` (future), plus `HOLD` bila netral.
+- **Tambah pair** — input di card Rekomendasi untuk menambah ticker pair (mis. `ADAUSDT` atau `ADA/USDT`) yang langsung bisa dicek/dianalisa (chart & trend). Tersimpan di `watchlist.json`; pair diturunkan otomatis ke simbol spot & futures.
 
 Endpoint internal (semua butuh secret):
 - `GET /api/meta` — daftar profile, ticker, timeframe, default MA.
+- `GET /api/tickers` — daftar pair tambahan di watchlist.
+- `POST /api/tickers` — tambah pair. Body: `{"ticker":"ADAUSDT","profile":"binance1","market":"spot"}` (opsional `symbol`/`futureSymbol` untuk override).
+- `DELETE /api/tickers?ticker=ADAUSDT` — hapus pair dari watchlist.
 - `GET /api/balance?profile=&market=` — saldo.
 - `GET /api/positions?profile=` — posisi futures.
 - `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=` — candle + MA + marker + analisa.
@@ -134,6 +138,8 @@ Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dip`
 - `symbolMap` — pemetaan ticker TradingView ke simbol CCXT spot & futures.
 
 Nilai yang diawali `env:` akan dibaca dari environment variable, jadi API key tidak perlu ditulis di file.
+
+Pair tambahan disimpan terpisah di `watchlist.json` (tidak ikut git). Ticker yang belum terdaftar pun tetap dikenali otomatis bila berpola `<BASE><QUOTE>` (mis. `ADAUSDT` → spot `ADA/USDT`, future `ADA/USDT:USDT`).
 
 ## Hosting di Ubuntu (systemd)
 
