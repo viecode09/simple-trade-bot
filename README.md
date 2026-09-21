@@ -113,6 +113,49 @@ Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dry-
 
 Nilai yang diawali `env:` akan dibaca dari environment variable, jadi API key tidak perlu ditulis di file.
 
+## Hosting di Ubuntu (systemd)
+
+Jalankan bot sebagai service yang auto-start saat boot dan auto-restart saat crash.
+
+```bash
+# 1. Prasyarat
+sudo apt update && sudo apt install -y git curl
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 2. Ambil kode & dependency
+sudo mkdir -p /opt/simple-trade-bot && sudo chown "$USER":"$USER" /opt/simple-trade-bot
+git clone https://github.com/viecode09/simple-trade-bot.git /opt/simple-trade-bot
+cd /opt/simple-trade-bot
+npm install
+
+# 3. Konfigurasi
+cp config.example.json config.json
+cp .env.example .env
+nano .env          # isi BINANCE_API_KEY, BINANCE_SECRET, WEBHOOK_SECRET
+nano config.json   # sesuaikan profile & symbolMap bila perlu
+
+# 4. Pasang service systemd
+sudo bash deploy/install.sh
+```
+
+`deploy/install.sh` menulis `/etc/systemd/system/simple-trade-bot.service` (User, Node, dan path terisi otomatis), lalu `enable --now`.
+
+Perintah operasional:
+
+```bash
+systemctl status simple-trade-bot     # cek status
+journalctl -u simple-trade-bot -f      # lihat log realtime
+systemctl restart simple-trade-bot     # restart
+systemctl stop simple-trade-bot        # stop
+```
+
+Catatan:
+
+- Jika Node dipasang lewat **nvm**, `sudo` tidak melihat PATH nvm. Pakai Node dari apt (langkah di atas) atau isi `ExecStart` manual dengan path node nvm.
+- Jalankan strategi MA `--watch` sebagai service terpisah: salin unit, ganti `ExecStart` menjadi `... src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --watch`, dan ubah `Description`.
+- Server webhook (port 8787) sebaiknya hanya diakses lewat reverse proxy (Nginx) + HTTPS, bukan dibuka langsung ke publik.
+
 ## Keamanan
 
 - Selalu set `webhook.secret`.

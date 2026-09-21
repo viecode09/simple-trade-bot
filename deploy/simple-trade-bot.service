@@ -1,0 +1,19 @@
+[Unit]
+Description=simple-trade-bot (TradingView webhook + MA strategy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=-__APP_DIR__/.env
+Environment=NODE_ENV=production
+ExecStart=__NODE_BIN__ src/index.js serve
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
