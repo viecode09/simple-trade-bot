@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import { loadConfig } from './config.js';
 import { logger } from './logger.js';
-import { executeAction, getBalance, getPositions, getOpenOrders, resolveSymbol } from './trader.js';
+import { executeAction, getBalance, getPositions, getOpenOrders, cancelOrder, resolveSymbol } from './trader.js';
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
 import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
 import { describeError } from './errors.js';
@@ -235,6 +235,20 @@ export function startWebhookServer() {
         }
         const orders = await getOpenOrders(url.searchParams.get('profile'));
         sendJson(res, 200, { ok: true, orders });
+        return;
+      }
+
+      if (req.method === 'DELETE' && path === '/api/orders') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const canceled = await cancelOrder(
+          url.searchParams.get('profile'),
+          url.searchParams.get('id'),
+          url.searchParams.get('symbol')
+        );
+        sendJson(res, 200, { ok: true, canceled });
         return;
       }
 

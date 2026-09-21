@@ -294,6 +294,22 @@ export async function executeAction(request) {
   return result;
 }
 
+export async function cancelOrder(profileId, id, symbol) {
+  if (!id || !symbol) {
+    throw new Error('id dan symbol wajib untuk membatalkan order');
+  }
+  const profile = getProfile(profileId);
+  const exchange = getExchange(profile, 'future');
+  await exchange.loadMarkets();
+
+  const order = await exchange.cancelOrder(id, symbol);
+  return {
+    id: order.id ?? id,
+    symbol: order.symbol ?? symbol,
+    status: order.status ?? 'canceled'
+  };
+}
+
 export async function getBalance(profileId, market) {
   const profile = getProfile(profileId);
   const normalized = normalizeMarket(market);

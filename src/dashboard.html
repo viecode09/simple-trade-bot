@@ -395,7 +395,7 @@
       </div>
       <div id="tabOrders" class="hidden">
         <table>
-          <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th></tr></thead>
+          <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th><th>Action</th></tr></thead>
           <tbody id="ordRows"></tbody>
         </table>
         <div id="ordEmpty" class="empty-state hidden"><div class="big">Belum ada open order</div><div>Order terbuka (limit/TP/SL) akan muncul di sini.</div></div>
@@ -991,6 +991,7 @@ async function loadOrders() {
       <td>${o.amount != null ? fmt(o.amount, 4) : '-'}</td>
       <td>${o.filled != null ? fmt(o.filled, 4) : '-'}</td>
       <td class="muted">${String(o.status || '').toUpperCase()}</td>
+      <td><button class="btn sm red" data-cancel="${o.id}" data-symbol="${o.symbol}">Cancel</button></td>
     </tr>`).join('');
   } catch (e) {
     tbody.innerHTML = '';
@@ -1009,6 +1010,23 @@ function switchTab(tab) {
 
 document.querySelectorAll('.positions .tab').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+$('ordRows').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-cancel]');
+  if (!btn) return;
+  const id = btn.dataset.cancel;
+  const symbol = btn.dataset.symbol;
+  if (!confirm(`Batalkan order ${pairLabel(symbol)} (${id})?`)) return;
+  btn.disabled = true;
+  try {
+    await api('/api/orders?' + q({ profile: state.profile, id, symbol }), { method: 'DELETE' });
+    toast('Order dibatalkan: ' + pairLabel(symbol), 'ok');
+    loadOrders();
+  } catch (err) {
+    toast('Gagal cancel: ' + err.message, 'err');
+    btn.disabled = false;
+  }
 });
 
 /* ---------- Modals ---------- */
