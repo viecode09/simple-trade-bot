@@ -203,13 +203,13 @@ async function placeProtection(exchange, profile, symbol, positionSide, amount, 
   const tp = takeProfit ? Number(takeProfit) : null;
   const sl = stopLoss ? Number(stopLoss) : null;
   if (!tp && !sl) {
-    return {};
+    return { warnings: [] };
   }
 
   const hedged = await isHedgeMode(exchange, symbol, profile);
   const side = positionSide === 'long' ? 'sell' : 'buy';
   const baseParams = hedged ? sideParam(true, positionSide) : { reduceOnly: true };
-  const result = {};
+  const result = { warnings: [] };
 
   if (tp) {
     try {
@@ -218,7 +218,9 @@ async function placeProtection(exchange, profile, symbol, positionSide, amount, 
         takeProfitPrice: tp
       });
     } catch (e) {
-      logger.warn(`Could not place take-profit for ${symbol}: ${e.message || e}`);
+      const msg = `TP ${tp} gagal: ${e.message || e}`;
+      result.warnings.push(msg);
+      logger.warn(`${symbol} ${msg}`);
     }
   }
 
@@ -229,7 +231,9 @@ async function placeProtection(exchange, profile, symbol, positionSide, amount, 
         stopPrice: sl
       });
     } catch (e) {
-      logger.warn(`Could not place stop-loss for ${symbol}: ${e.message || e}`);
+      const msg = `SL ${sl} gagal: ${e.message || e}`;
+      result.warnings.push(msg);
+      logger.warn(`${symbol} ${msg}`);
     }
   }
 
@@ -253,7 +257,7 @@ export async function executeAction(request) {
   const price = request.price ? Number(request.price) : undefined;
 
   let order;
-  let protection = {};
+  let protection = { warnings: [] };
 
   if (action === 'close') {
     order = market === 'future' ? await futuresClose(exchange, symbol, profile) : await spotClose(exchange, symbol);
@@ -281,7 +285,8 @@ export async function executeAction(request) {
     action,
     order: orderSummary(order),
     takeProfit: protection.takeProfit ? orderSummary(protection.takeProfit) : null,
-    stopLoss: protection.stopLoss ? orderSummary(protection.stopLoss) : null
+    stopLoss: protection.stopLoss ? orderSummary(protection.stopLoss) : null,
+    warnings: protection.warnings || []
   };
   logger.info(`${action} ${market} ${symbol} x${result.order.amount} -> order ${result.order.id}` +
     (result.takeProfit ? ` | TP ${result.takeProfit.id}` : '') +
@@ -340,8 +345,55 @@ export async function getOpenOrders(profileId) {
     throw new Error(`Exchange "${profile.exchange}" does not support fetchOpenOrders`);
   }
 
-  const orders = await exchange.fetchOpenOrders(undefined, undefined, undefined, { type: 'future' });
-  return orders.map(order => ({
+  const seen = new Set();
+  const collected = [];
+  const add = list => {
+    for (const order of list) {
+      const key = order.id != null ? String(order.id) : `${order.symbol}:${order.type}:${order.price}:${order.amount}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        collected.push(order);
+      }
+    }
+  };
+
+  const attempts = [
+    () => exchange.fetchOpenOrders(undefined, undefined, undefined, { type: 'future' }),
+    () => exchange.fetchOpenOrders(undefined, undefined, undefined, { type: 'future', stop: true }),
+    () => exchange.fetchOpenOrders(undefined, undefined, undefined, { type: 'future', trigger: true })
+  ];
+
+  let success = false;
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      add(await attempt());
+      success = true;
+    } catch (e) {
+      lastError = lastError || e;
+    }
+  }
+
+  if (collected.length === 0) {
+    try {
+      const positions = await exchange.fetchPositions();
+      const symbols = [...new Set(positions.filter(p => p.contracts).map(p => p.symbol))];
+      for (const symbol of symbols) {
+        try {
+          add(await exchange.fetchOpenOrders(symbol, undefined, undefined, { type: 'future' }));
+        } catch { /* lewati symbol ini */ }
+      }
+      success = true;
+    } catch (e) {
+      lastError = lastError || e;
+    }
+  }
+
+  if (!success && lastError) {
+    throw lastError;
+  }
+
+  return collected.map(order => ({
     id: order.id,
     symbol: order.symbol,
     side: order.side,

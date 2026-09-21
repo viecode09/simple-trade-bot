@@ -1136,6 +1136,9 @@ async function executeOrder(body) {
     const data = await api('/api/order', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const o = data.order || {};
     toast('Order terkirim: ' + (o.side ? o.side.toUpperCase() + ' ' + (data.symbol || '') : 'OK'), 'ok');
+    if (Array.isArray(data.warnings) && data.warnings.length) {
+      toast('TP/SL: ' + data.warnings.join(' · '), 'err');
+    }
     loadPositions();
     loadBalance();
     if (state.tab === 'orders') loadOrders();
