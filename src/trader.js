@@ -195,7 +195,45 @@ async function futuresOpen(exchange, profile, symbol, side, amount, amountType) 
   const base = await toBaseAmount(exchange, symbol, amount, amountType ?? 'quote');
   const hedged = await isHedgeMode(exchange, symbol, profile);
   const params = hedged ? sideParam(true, side === 'buy' ? 'long' : 'short') : {};
-  return placeOrder(exchange, symbol, side, base, undefined, params);
+  const order = await placeOrder(exchange, symbol, side, base, undefined, params);
+  return { order, amount: base };
+}
+
+async function placeProtection(exchange, profile, symbol, positionSide, amount, takeProfit, stopLoss) {
+  const tp = takeProfit ? Number(takeProfit) : null;
+  const sl = stopLoss ? Number(stopLoss) : null;
+  if (!tp && !sl) {
+    return {};
+  }
+
+  const hedged = await isHedgeMode(exchange, symbol, profile);
+  const side = positionSide === 'long' ? 'sell' : 'buy';
+  const baseParams = hedged ? sideParam(true, positionSide) : { reduceOnly: true };
+  const result = {};
+
+  if (tp) {
+    try {
+      result.takeProfit = await exchange.createOrder(symbol, 'market', side, amount, undefined, {
+        ...baseParams,
+        takeProfitPrice: tp
+      });
+    } catch (e) {
+      logger.warn(`Could not place take-profit for ${symbol}: ${e.message || e}`);
+    }
+  }
+
+  if (sl) {
+    try {
+      result.stopLoss = await exchange.createOrder(symbol, 'market', side, amount, undefined, {
+        ...baseParams,
+        stopPrice: sl
+      });
+    } catch (e) {
+      logger.warn(`Could not place stop-loss for ${symbol}: ${e.message || e}`);
+    }
+  }
+
+  return result;
 }
 
 export async function executeAction(request) {
@@ -215,6 +253,7 @@ export async function executeAction(request) {
   const price = request.price ? Number(request.price) : undefined;
 
   let order;
+  let protection = {};
 
   if (action === 'close') {
     order = market === 'future' ? await futuresClose(exchange, symbol, profile) : await spotClose(exchange, symbol);
@@ -225,7 +264,9 @@ export async function executeAction(request) {
     order = await futuresStop(exchange, symbol, request.amount, request.stopPrice, profile);
   } else if (market === 'future') {
     const side = action === 'long' ? 'buy' : 'sell';
-    order = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType);
+    const placed = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType);
+    order = placed.order;
+    protection = await placeProtection(exchange, profile, symbol, action, placed.amount, request.takeProfit, request.stopLoss);
   } else {
     const side = action === 'long' ? 'buy' : 'sell';
     const amountType = request.amountType ?? 'quote';
@@ -233,8 +274,18 @@ export async function executeAction(request) {
     order = await placeOrder(exchange, symbol, side, amount, price);
   }
 
-  const result = { profile: profile.id, market, symbol, action, order: orderSummary(order) };
-  logger.info(`${action} ${market} ${symbol} x${result.order.amount} -> order ${result.order.id}`);
+  const result = {
+    profile: profile.id,
+    market,
+    symbol,
+    action,
+    order: orderSummary(order),
+    takeProfit: protection.takeProfit ? orderSummary(protection.takeProfit) : null,
+    stopLoss: protection.stopLoss ? orderSummary(protection.stopLoss) : null
+  };
+  logger.info(`${action} ${market} ${symbol} x${result.order.amount} -> order ${result.order.id}` +
+    (result.takeProfit ? ` | TP ${result.takeProfit.id}` : '') +
+    (result.stopLoss ? ` | SL ${result.stopLoss.id}` : ''));
   return result;
 }
 
@@ -279,3 +330,31 @@ export async function getPositions(profileId) {
       notional: entry.notional ?? null
     }));
 }
+
+export async function getOpenOrders(profileId) {
+  const profile = getProfile(profileId);
+  const exchange = getExchange(profile, 'future');
+  await exchange.loadMarkets();
+
+  if (!exchange.has['fetchOpenOrders']) {
+    throw new Error(`Exchange "${profile.exchange}" does not support fetchOpenOrders`);
+  }
+
+  const orders = await exchange.fetchOpenOrders();
+  return orders.map(order => ({
+    id: order.id,
+    symbol: order.symbol,
+    side: order.side,
+    type: order.type,
+    price: order.price ?? null,
+    triggerPrice: order.triggerPrice ?? order.stopPrice ?? null,
+    amount: order.amount ?? null,
+    filled: order.filled ?? null,
+    remaining: order.remaining ?? null,
+    status: order.status ?? null,
+    reduceOnly: order.reduceOnly ?? null,
+    positionSide: order.positionSide ?? null,
+    timestamp: order.timestamp ?? null
+  }));
+}
+

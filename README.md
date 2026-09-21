@@ -41,9 +41,9 @@ Layout trading terminal (dark, minimalis):
 - **Balance Summary** (lebar penuh) — Total Balance, Available Balance, Today's PnL (nilai & %).
 - **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D) + toggle **RSI**, candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir + marker sinyal (MA/dip/RSI). Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot — modal konfirmasi menampilkan Market, **Leverage** (Futures), serta baris **Take Profit / Potensi Profit** dan **Stop Loss / Potensi Loss** dengan format `harga TP/SL / nilai PnL (USDT & %)` yang ikut berubah saat amount diubah) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
 - **Manual Order** (kolom kanan, di bawah Bot Recommendation) — form Market/Action (Long/Short/Close/Stop), Ticker, Amount, Amount Type, Price entry (opsional), **Leverage** (khusus Futures), dan **Take Profit / Stop Loss dalam USDT**. Harga TP/SL **dihitung otomatis** (tidak ada input harga manual), ditampilkan sebagai `harga TP/SL / nilai PnL (USDT & %)` di preview dan modal konfirmasi; aksi **Stop** memakai trigger otomatis dari target Stop Loss. Tombol Place Order mengirim order via `/api/order` setelah konfirmasi.
-- **Open Positions** (lebar penuh) — tabel posisi (Pair, Side, Entry, Mark, PnL, **Risk**, **Recommendation**, aksi View/Close) atau empty state. Risk dihitung dari jarak harga mark ke liquidation (atau leverage), Recommendation dari ROE/PnL + level risk (Take Profit / Cut Loss / Cut-Reduce / Hold).
+- **Open Positions** (lebar penuh, dengan tab **Positions** / **Open Orders**) — tab Positions: tabel posisi (Pair, Side, Entry, Mark, PnL, **Risk**, **Recommendation**, aksi View/Close). Tab Open Orders: semua order terbuka (Pair, Type, Side, Trigger/Price, Amount, Filled, Status). Risk dihitung dari jarak harga mark ke liquidation (atau leverage), Recommendation dari ROE/PnL + level risk.
 
-Catatan: tombol **Trade with Bot**, **Place Order**, dan **Close** menampilkan modal konfirmasi lalu **mengirim order sungguhan** ke Binance (`POST /api/order`). Pastikan API key aktif & benar sebelum menekan Konfirmasi. Layout responsif: di layar kecil sidebar Favorites jadi drawer (tombol menu di header), dan **Balance Summary sticky** di atas saat scroll.
+Catatan: tombol **Trade with Bot**, **Place Order**, dan **Close** menampilkan modal konfirmasi lalu **mengirim order sungguhan** ke Binance (`POST /api/order`). Untuk **long/short futures**, bot otomatis memasang order **TP & SL** (take-profit/stop-loss market, reduce-only) sesuai harga di modal. Pastikan API key aktif & benar sebelum menekan Konfirmasi. Layout responsif: di layar kecil sidebar Favorites jadi drawer (tombol menu di header), dan **Balance Summary sticky** di atas saat scroll.
 
 Endpoint internal (semua butuh secret):
 - `GET /api/meta` — daftar profile, ticker, timeframe, default MA.
@@ -53,6 +53,7 @@ Endpoint internal (semua butuh secret):
 - `GET /api/ticker?profile=&market=&symbol=` — statistik 24 jam (harga, open, high, low, volume, perubahan %).
 - `GET /api/balance?profile=&market=` — saldo.
 - `GET /api/positions?profile=` — posisi futures.
+- `GET /api/orders?profile=` — open orders futures (limit/TP/SL) dengan trigger price, amount, filled, status.
 - `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=&dip=&rsi=&rsiPeriod=&rsiOversold=&rsiOverbought=` — candle + MA + RSI + marker + analisa.
 - `GET /api/trends?profile=&market=&symbol=&timeframes=&fast=&slow=&trend=` — trend multi-timeframe + rekomendasi aksi. `timeframes` opsional (default `5m,15m,1h,4h,1d`).
 - `GET /api/stream?secret=&profile=&market=&interval=&scope=` — Server-Sent Events saldo & posisi. `scope` = `balance`/`positions`/`both` (default `both`).
@@ -85,6 +86,7 @@ Field:
 - `amount` — angka. Default dihitung sebagai **quote** (mis. USDT) untuk long/short; `amountType: "base"` untuk jumlah koin. Untuk `stop`, opsional (default seluruh contracts posisi).
 - `price` — opsional; jika diisi, order dikirim sebagai **limit**, kalau tidak **market**.
 - `stopPrice` — wajib untuk `action: "stop"` (harga trigger stop market futures, reduce-only).
+- `takeProfit` / `stopLoss` — opsional; untuk `long`/`short` futures, otomatis memasang order **take-profit market** & **stop-loss market** reduce-only pada posisi setelah entry.
 
 Untuk close: cukup `{"action":"close"}`.
 - Spot: menjual seluruh saldo base yang tersedia.
@@ -101,7 +103,10 @@ node src/index.js order --profile=binance1 --market=spot --symbol=BTCUSDT --acti
 node src/index.js order --profile=binance1 --market=future --symbol=BTCUSDT --action=short --amount=50 --amount-type=quote
 node src/index.js order --profile=binance1 --market=future --symbol=BTC/USDT:USDT --action=close
 node src/index.js order --profile=binance1 --market=future --symbol=BTCUSDT --action=stop --stop-price=60000
+node src/index.js order --profile=binance1 --market=future --symbol=BTCUSDT --action=long --amount=50 --take-profit=70000 --stop-loss=60000
 ```
+
+Untuk `long`/`short` futures, `--take-profit`/`--stop-loss` (harga) akan otomatis memasang order **take-profit market** dan **stop-loss market** reduce-only sesuai posisi setelah entry.
 
 ## Strategi MA (7/25/99)
 

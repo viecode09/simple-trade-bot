@@ -33,9 +33,10 @@ Usage:
   node src/index.js positions <profileId>
       Show open futures positions.
 
-  node src/index.js order --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --action=<long|short|close> --amount=<n> [--amount-type=quote|base] [--price=<n>]
+  node src/index.js order --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --action=<long|short|close> --amount=<n> [--amount-type=quote|base] [--price=<n>] [--take-profit=<n>] [--stop-loss=<n>]
   node src/index.js order --profile=<id> --market=future --symbol=<SYMBOL> --action=stop --stop-price=<n> [--amount=<n>]
       Stop market reduce-only di posisi futures (default seluruh contracts).
+      Untuk long/short futures, --take-profit/--stop-loss otomatis memasang order TP/SL reduce-only.
 
   node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--rsi] [--rsi-period=14] [--rsi-oversold=30] [--rsi-overbought=70] [--dry-run] [--watch] [--interval=30]
       MA cross strategy (long: MA7 cross up MA25 & price>MA99; short: MA7 cross down MA25 & price<MA99).
@@ -84,7 +85,9 @@ async function main() {
         amount: args.amount,
         amountType: args['amount-type'],
         price: args.price,
-        stopPrice: args['stop-price']
+        stopPrice: args['stop-price'],
+        takeProfit: args['take-profit'],
+        stopLoss: args['stop-loss']
       });
       console.log(JSON.stringify(result, null, 2));
       break;

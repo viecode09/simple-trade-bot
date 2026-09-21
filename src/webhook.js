@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import { loadConfig } from './config.js';
 import { logger } from './logger.js';
-import { executeAction, getBalance, getPositions, resolveSymbol } from './trader.js';
+import { executeAction, getBalance, getPositions, getOpenOrders, resolveSymbol } from './trader.js';
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
 import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
 import { describeError } from './errors.js';
@@ -228,6 +228,16 @@ export function startWebhookServer() {
         return;
       }
 
+      if (req.method === 'GET' && path === '/api/orders') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const orders = await getOpenOrders(url.searchParams.get('profile'));
+        sendJson(res, 200, { ok: true, orders });
+        return;
+      }
+
       if (req.method === 'GET' && path === '/api/candles') {
         if (!secretValid(config, req, url, null)) {
           sendJson(res, 401, { ok: false, error: 'invalid secret' });
@@ -404,7 +414,9 @@ export function startWebhookServer() {
           amount: payload.amount,
           amountType: payload.amountType,
           price: payload.price,
-          stopPrice: payload.stopPrice ?? payload.stop_price ?? payload.triggerPrice
+          stopPrice: payload.stopPrice ?? payload.stop_price ?? payload.triggerPrice,
+          takeProfit: payload.takeProfit ?? payload.take_profit ?? payload.tp,
+          stopLoss: payload.stopLoss ?? payload.stop_loss ?? payload.sl
         });
 
         sendJson(res, 200, { ok: true, ...result });
