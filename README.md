@@ -79,6 +79,28 @@ node src/index.js order --profile=binance1 --market=future --symbol=BTCUSDT --ac
 node src/index.js order --profile=binance1 --market=future --symbol=BTC/USDT:USDT --action=close
 ```
 
+## Strategi MA (7/25/99)
+
+Bot bisa auto-trading dari data candle exchange (bukan TradingView) memakai MA cross + filter tren:
+
+- **Long**: MA7 cross ke atas MA25 **dan** harga > MA99.
+- **Short**: MA7 cross ke bawah MA25 **dan** harga < MA99.
+- Posisi berlawanan ditutup dulu (`close`) lalu buka arah baru.
+- Sinyal dihitung dari candle yang **sudah closed** (anti-repaint).
+
+```bash
+# cek sinyal sekali (dry-run, tidak order)
+node src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --timeframe=15m --dry-run
+
+# eksekusi sekali
+node src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --timeframe=15m
+
+# pantau terus (polling, order hanya saat cross candle baru)
+node src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --timeframe=15m --watch --interval=30
+```
+
+Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dry-run`, `--watch`, `--interval` (detik).
+
 ## Konfigurasi
 
 `config.json`:
