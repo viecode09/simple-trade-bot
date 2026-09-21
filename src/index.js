@@ -37,9 +37,10 @@ Usage:
   node src/index.js order --profile=<id> --market=future --symbol=<SYMBOL> --action=stop --stop-price=<n> [--amount=<n>]
       Stop market reduce-only di posisi futures (default seluruh contracts).
 
-  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--dry-run] [--watch] [--interval=30]
+  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--rsi] [--rsi-period=14] [--rsi-oversold=30] [--rsi-overbought=70] [--dry-run] [--watch] [--interval=30]
       MA cross strategy (long: MA7 cross up MA25 & price>MA99; short: MA7 cross down MA25 & price<MA99).
       --dip: aktifkan dip_catcher (long saat harga pullback ke MA slow lalu reclaim, selama di atas MA trend).
+      --rsi: aktifkan strategi RSI (long saat RSI rebound dari oversold; short saat RSI turun dari overbought).
 
 Examples:
   node src/index.js order --profile=binance1 --market=spot --symbol=BTCUSDT --action=long --amount=100
@@ -103,6 +104,10 @@ async function main() {
         interval: args.interval ? Number(args.interval) : undefined,
         dip: args.dip === true || args.dip === 'true',
         dipLookback: args['dip-lookback'] ? Number(args['dip-lookback']) : undefined,
+        rsi: args.rsi === true || args.rsi === 'true',
+        rsiPeriod: args['rsi-period'] ? Number(args['rsi-period']) : undefined,
+        rsiOversold: args['rsi-oversold'] ? Number(args['rsi-oversold']) : undefined,
+        rsiOverbought: args['rsi-overbought'] ? Number(args['rsi-overbought']) : undefined,
         dryRun: args['dry-run'] === true || args['dry-run'] === 'true'
       };
 

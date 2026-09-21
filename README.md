@@ -39,8 +39,8 @@ Layout trading terminal (dark, minimalis):
 - **Header** — logo, status bot (Running/Stopped), toggle Spot/Futures, Settings, avatar profile.
 - **Sidebar Favorites** (kiri) — daftar pair favorit + harga & perubahan 24 jam, pencarian, tombol **+ Add Favorite**, dan bintang untuk menghapus dari watchlist. Klik pair → seluruh dashboard mengikuti.
 - **Balance Summary** (lebar penuh) — Total Balance, Available Balance, Today's PnL (nilai & %).
-- **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D), candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir. Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
-- **Open Positions** (lebar penuh) — tabel posisi (Pair, Side, Entry, Mark, PnL, aksi View/Close) atau empty state.
+- **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D) + toggle **RSI**, candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir + marker sinyal (MA/dip/RSI). Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
+- **Open Positions** (lebar penuh) — tabel posisi (Pair, Side, Entry, Mark, PnL, **Risk**, **Recommendation**, aksi View/Close) atau empty state. Risk dihitung dari jarak harga mark ke liquidation (atau leverage), Recommendation dari ROE/PnL + level risk (Take Profit / Cut Loss / Cut-Reduce / Hold).
 
 Catatan: tombol **Trade with Bot** dan **Close** hanya menampilkan modal konfirmasi (**prototype — tidak mengeksekusi order** ke Binance).
 
@@ -52,7 +52,7 @@ Endpoint internal (semua butuh secret):
 - `GET /api/ticker?profile=&market=&symbol=` — statistik 24 jam (harga, open, high, low, volume, perubahan %).
 - `GET /api/balance?profile=&market=` — saldo.
 - `GET /api/positions?profile=` — posisi futures.
-- `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=` — candle + MA + marker + analisa.
+- `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=&dip=&rsi=&rsiPeriod=&rsiOversold=&rsiOverbought=` — candle + MA + RSI + marker + analisa.
 - `GET /api/trends?profile=&market=&symbol=&timeframes=&fast=&slow=&trend=` — trend multi-timeframe + rekomendasi aksi. `timeframes` opsional (default `5m,15m,1h,4h,1d`).
 - `GET /api/stream?secret=&profile=&market=&interval=&scope=` — Server-Sent Events saldo & posisi. `scope` = `balance`/`positions`/`both` (default `both`).
 - `POST /api/order` — order (sama seperti `/webhook`).
@@ -108,7 +108,8 @@ Bot bisa auto-trading dari data candle exchange (bukan TradingView) memakai MA c
 
 - **Long**: MA7 cross ke atas MA25 **dan** harga > MA99.
 - **Short**: MA7 cross ke bawah MA25 **dan** harga < MA99.
-- **dip_catcher** (opsional, `--dip`): long tambahan saat harga pullback menyentuh/di bawah MA25 lalu **reclaim** ke atas MA25, selama harga masih di atas MA99. Memperkuat MA dengan entry di pullback tren naik.
+- **dip_catcher** (opsional, `--dip`): long tambahan saat harga pullback menyentuh/di bawah MA25 lalu **reclaim** ke atas MA25, selama harga masih di atas MA99.
+- **RSI** (opsional, `--rsi`): strategi mean-reversion. Long saat RSI **rebound dari oversold** (naik melewati ambang bawah), short saat RSI **turun dari overbought**. Ambang & periode bisa diatur (`--rsi-period`, `--rsi-oversold`, `--rsi-overbought`).
 - Posisi berlawanan ditutup dulu (`close`) lalu buka arah baru.
 - Sinyal dihitung dari candle yang **sudah closed** (anti-repaint).
 
@@ -124,9 +125,12 @@ node src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT -
 
 # aktifkan dip_catcher (dip ke MA25 + reclaim)
 node src/index.js strategy --profile=binance1 --market=spot --symbol=BTCUSDT --amount=50 --timeframe=15m --dip --dip-lookback=5 --dry-run
+
+# aktifkan strategi RSI (rebound oversold / turun dari overbought)
+node src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --timeframe=15m --rsi --rsi-period=14 --rsi-oversold=30 --rsi-overbought=70 --dry-run
 ```
 
-Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dip`, `--dip-lookback=<n>` (default 3, jumlah candle ke belakang untuk mendeteksi sentuhan MA slow), `--dry-run`, `--watch`, `--interval` (detik).
+Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dip`, `--dip-lookback=<n>` (default 3), `--rsi`, `--rsi-period=<n>` (default 14), `--rsi-oversold=<n>` (default 30), `--rsi-overbought=<n>` (default 70), `--dry-run`, `--watch`, `--interval` (detik).
 
 ## Konfigurasi
 

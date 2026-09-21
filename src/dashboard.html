@@ -133,12 +133,12 @@
   .balance .cell .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
   .balance .cell .v { font-size: 20px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .balance .cell .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .up { color: var(--green); } .down { color: var(--red); } .muted { color: var(--muted); }
+  .up { color: var(--green); } .down { color: var(--red); } .muted { color: var(--muted); } .warn { color: var(--yellow); }
 
   /* Workspace */
-  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: stretch; }
 
-  .chart-card { padding: 0; overflow: hidden; }
+  .chart-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
   .pair-head { display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .pair-head .pc-name { display: flex; align-items: center; gap: 10px; }
   .coin-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); font-weight: 700; color: var(--yellow); }
@@ -153,7 +153,7 @@
   .tf { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 6px; font-size: 12px; }
   .tf:hover { color: var(--text); }
   .tf.active { color: var(--yellow); border-color: var(--yellow); }
-  #chart { width: 100%; height: 460px; }
+  #chart { width: 100%; flex: 1 1 auto; min-height: 420px; }
 
   /* Right column */
   .side-col { display: flex; flex-direction: column; gap: 16px; }
@@ -200,6 +200,9 @@
   .modal .m-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
   .modal .m-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
   .field { display: flex; flex-direction: column; gap: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .manual .field, .manual .grid2 { margin-top: 10px; }
+  .manual h3 { margin-bottom: 4px; }
   .field label { color: var(--muted); font-size: 11px; }
   .field input, .field select {
     background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
@@ -286,6 +289,7 @@
           <button class="tf" data-tf="1h">1H</button>
           <button class="tf" data-tf="4h">4H</button>
           <button class="tf" data-tf="1d">1D</button>
+          <button class="tf" id="rsiToggle" title="Aktifkan strategi RSI (oversold/overbought)">RSI</button>
           <span class="spacer" style="flex:1"></span>
           <span id="chartMsg" class="muted" style="font-size:11px"></span>
         </div>
@@ -309,6 +313,24 @@
           <button class="btn primary block" id="tradeBtn">Trade with Bot</button>
         </div>
 
+        <div class="card panel manual">
+          <h3>Manual Order</h3>
+          <div class="grid2">
+            <div class="field"><label>Market</label><select id="moMarket"><option value="spot">Spot</option><option value="future" selected>Futures</option></select></div>
+            <div class="field"><label>Action</label><select id="moAction"><option value="long">Long / Buy</option><option value="short">Short / Sell</option><option value="close">Close</option><option value="stop">Stop</option></select></div>
+          </div>
+          <div class="field"><label>Ticker</label><input id="moTicker" placeholder="BTCUSDT"></div>
+          <div class="grid2">
+            <div class="field"><label>Amount</label><input id="moAmount" type="number" step="any" placeholder="50"></div>
+            <div class="field"><label>Amount Type</label><select id="moAmountType"><option value="quote">Quote (USDT)</option><option value="base">Base</option></select></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Price (opsional)</label><input id="moPrice" type="number" step="any" placeholder="Market"></div>
+            <div class="field"><label>Stop Price</label><input id="moStopPrice" type="number" step="any" placeholder="untuk Stop"></div>
+          </div>
+          <button class="btn block" id="moBtn" style="margin-top:14px">Place Order</button>
+        </div>
+
         <div class="card panel analysis">
           <h3>Market Analysis</h3>
           <div class="kv"><span class="k">Trend</span><span class="v badge" id="anTrend">-</span></div>
@@ -325,7 +347,7 @@
       <div class="p-head"><h3>Open Positions</h3><span id="posMsg" class="muted" style="font-size:11px"></span></div>
       <div id="posBody">
         <table>
-          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>PnL</th><th>Action</th></tr></thead>
+          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
           <tbody id="posRows"></tbody>
         </table>
         <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
@@ -344,6 +366,7 @@ const state = {
   market: 'future',
   ticker: null,
   timeframe: '15m',
+  rsi: false,
   meta: {},
   favorites: [],
   custom: new Set(),
@@ -502,6 +525,8 @@ async function selectPair(ticker) {
   renderFavorites();
   updatePairHeader({ symbol: ticker, ticker: {} });
   $('pairStar').style.color = state.custom.has(ticker) || state.favorites.some(f => f.ticker === ticker) ? 'var(--yellow)' : 'var(--muted)';
+  $('moTicker').value = ticker;
+  $('moMarket').value = state.market;
   await loadPair();
 }
 
@@ -528,10 +553,12 @@ function updatePairHeader(data) {
 async function loadPair() {
   if (!state.ticker || !state.secret) return;
   const base = { profile: state.profile, market: state.market, symbol: state.ticker };
+  const chartParams = { ...base, timeframe: state.timeframe, limit: 300 };
+  if (state.rsi) chartParams.rsi = 'true';
   $('chartMsg').textContent = 'memuat...';
   const [tick, chartData, trends] = await Promise.all([
     api('/api/ticker?' + q(base)).catch(() => null),
-    api('/api/candles?' + q({ ...base, timeframe: state.timeframe, limit: 300 })).catch(e => ({ error: e.message })),
+    api('/api/candles?' + q(chartParams)).catch(e => ({ error: e.message })),
     api('/api/trends?' + q(base)).catch(() => null)
   ]);
   if (tick) updatePairHeader(tick);
@@ -542,7 +569,7 @@ async function loadPair() {
     const ind = computeIndicators(chartData.candles);
     renderRecommendation(ind, chartData.analysis, trends);
     renderAnalysis(ind, chartData.analysis, trends);
-    $('chartMsg').textContent = chartData.symbol + ' · ' + chartData.timeframe;
+    $('chartMsg').textContent = chartData.symbol + ' · ' + chartData.timeframe + (state.rsi ? ' · RSI' : '');
   } else {
     $('chartMsg').textContent = (chartData && chartData.error) ? 'data tidak tersedia' : '';
     renderRecommendation(null, null, null);
@@ -574,6 +601,8 @@ function ensureChart() {
   if (state.chart) return;
   const el = $('chart');
   state.chart = LightweightCharts.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight,
     layout: { background: { color: '#161a1e' }, textColor: '#848e9c' },
     grid: { vertLines: { color: '#1e2329' }, horzLines: { color: '#1e2329' } },
     rightPriceScale: { borderColor: '#2b3139' },
@@ -585,7 +614,7 @@ function ensureChart() {
   state.series.ema50 = state.chart.addLineSeries({ color: '#4f8cff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'EMA50' });
   state.series.volume = state.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', color: '#2b3139' });
   state.series.volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
-  new ResizeObserver(() => state.chart.applyOptions({ width: el.clientWidth })).observe(el);
+  new ResizeObserver(() => state.chart.applyOptions({ width: el.clientWidth, height: el.clientHeight })).observe(el);
 }
 
 function renderChart(data) {
@@ -675,7 +704,7 @@ function renderAnalysis(ind, analysis, trends) {
   $('anMomentum').textContent = ind.momentum > 0 ? (strong ? 'Strong Up' : 'Weak Up') : (strong ? 'Strong Down' : 'Weak Down');
   $('anMomentum').className = 'v ' + (ind.momentum > 0 ? 'up' : 'down');
 
-  const r = ind.rsi;
+  const r = analysis.rsi != null ? analysis.rsi : ind.rsi;
   $('anRsi').textContent = r == null ? '-' : r.toFixed(1) + (r > 70 ? ' (Overbought)' : r < 30 ? ' (Oversold)' : '');
   $('anRsi').className = 'v ' + (r == null ? 'muted' : r > 70 ? 'down' : r < 30 ? 'up' : '');
 
@@ -720,6 +749,41 @@ async function loadBalance() {
   }
 }
 
+function positionRisk(p) {
+  const mark = Number(p.markPrice);
+  const liq = Number(p.liquidationPrice);
+  const lev = Number(p.leverage) || 0;
+  let dist = null;
+  if (Number.isFinite(liq) && liq > 0 && Number.isFinite(mark) && mark > 0) {
+    dist = Math.abs(mark - liq) / mark * 100;
+  }
+  let level = 'Low', cls = 'up';
+  if (dist != null && dist < 10) { level = 'High'; cls = 'down'; }
+  else if (dist != null && dist < 25) { level = 'Medium'; cls = 'warn'; }
+  else if (dist == null && lev >= 20) { level = 'High'; cls = 'down'; }
+  else if (dist == null && lev >= 10) { level = 'Medium'; cls = 'warn'; }
+  return { level, cls, dist };
+}
+
+function positionReco(p) {
+  const pnl = Number(p.unrealizedPnl) || 0;
+  let roe = Number(p.percentage);
+  if (!Number.isFinite(roe)) {
+    const entry = Number(p.entryPrice) || 0;
+    const contracts = Number(p.contracts) || 0;
+    const lev = Number(p.leverage) || 1;
+    const notional = entry * contracts;
+    const margin = lev ? notional / lev : notional;
+    roe = margin ? (pnl / margin) * 100 : 0;
+  }
+  const risk = positionRisk(p);
+  if (risk.level === 'High' && pnl < 0) return { label: 'Cut / Reduce', cls: 'down' };
+  if (roe >= 5) return { label: 'Take Profit', cls: 'up' };
+  if (roe <= -5) return { label: 'Cut Loss', cls: 'down' };
+  if (risk.level === 'High') return { label: 'Reduce Risk', cls: 'warn' };
+  return { label: 'Hold', cls: 'muted' };
+}
+
 async function loadPositions() {
   const tbody = $('posRows');
   try {
@@ -732,17 +796,23 @@ async function loadPositions() {
       return;
     }
     $('posEmpty').classList.add('hidden');
-    tbody.innerHTML = rows.map(p => `<tr>
+    tbody.innerHTML = rows.map(p => {
+      const risk = positionRisk(p);
+      const reco = positionReco(p);
+      return `<tr>
       <td>${pairLabel(p.symbol)}</td>
       <td><span class="side-tag ${p.side === 'long' ? 'long' : 'short'}">${String(p.side || '').toUpperCase()}</span></td>
       <td>${fmtPrice(p.entryPrice)}</td>
       <td>${fmtPrice(p.markPrice)}</td>
       <td class="${(Number(p.unrealizedPnl) || 0) >= 0 ? 'up' : 'down'}">${fmt(p.unrealizedPnl, 2)}</td>
+      <td class="${risk.cls}">${risk.level}${risk.dist != null ? ' (' + risk.dist.toFixed(1) + '%)' : ''}</td>
+      <td class="${reco.cls}">${reco.label}</td>
       <td>
         <button class="btn sm" data-view="${p.symbol}">View</button>
         <button class="btn sm red" data-close="${p.symbol}" data-side="${p.side}">Close</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
   } catch (e) {
     tbody.innerHTML = '';
     $('posEmpty').classList.remove('hidden');
@@ -830,7 +900,7 @@ function confirmTrade(side, pair, posSide) {
     <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="tradeConfirm">Konfirmasi</button></div>`);
 }
 $('modalRoot').addEventListener('click', e => {
-  if (e.target.id === 'tradeConfirm') {
+  if (e.target.id === 'tradeConfirm' || e.target.id === 'moConfirm') {
     closeModal();
     toast('Prototype: order tidak dieksekusi. Hubungkan eksekusi setelah validasi.', 'ok');
   }
@@ -851,8 +921,42 @@ $('detailBtn').onclick = async () => {
 
 $('tradeBtn').onclick = () => { if (state.ticker) confirmTrade(state.lastRec && state.lastRec.signal === 'SELL' ? 'sell' : 'buy', pairLabel(state.ticker)); };
 
+function confirmManual() {
+  const order = {
+    market: $('moMarket').value,
+    action: $('moAction').value,
+    ticker: $('moTicker').value.trim() || state.ticker,
+    amount: $('moAmount').value,
+    amountType: $('moAmountType').value,
+    price: $('moPrice').value,
+    stopPrice: $('moStopPrice').value
+  };
+  if (!order.ticker) { toast('Ticker wajib diisi', 'err'); return; }
+  if (order.action !== 'close' && order.action !== 'stop' && !order.amount) { toast('Amount wajib untuk long/short', 'err'); return; }
+  if (order.action === 'stop' && !order.stopPrice) { toast('Stop price wajib untuk action stop', 'err'); return; }
+  openModal(`
+    <div class="m-head"><h3>Konfirmasi Manual Order</h3><button class="close-x" data-close>×</button></div>
+    <div class="m-body">
+      <div class="kv"><span class="k">Pair</span><span class="v">${order.ticker}</span></div>
+      <div class="kv"><span class="k">Market</span><span class="v">${order.market.toUpperCase()}</span></div>
+      <div class="kv"><span class="k">Action</span><span class="v">${order.action.toUpperCase()}</span></div>
+      <div class="kv"><span class="k">Amount</span><span class="v">${order.amount || '-'} ${order.amountType}</span></div>
+      <div class="kv"><span class="k">Price</span><span class="v">${order.price || 'Market'}</span></div>
+      <div class="kv"><span class="k">Stop Price</span><span class="v">${order.stopPrice || '-'}</span></div>
+      <div class="muted" style="font-size:11px">Mode prototype: order tidak dieksekusi ke Binance.</div>
+    </div>
+    <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="moConfirm">Konfirmasi</button></div>`);
+}
+$('moBtn').onclick = confirmManual;
+
 /* ---------- Wire up ---------- */
 $('tfRow').addEventListener('click', e => {
+  if (e.target.closest('#rsiToggle')) {
+    state.rsi = !state.rsi;
+    $('rsiToggle').classList.toggle('active', state.rsi);
+    loadPair();
+    return;
+  }
   const btn = e.target.closest('.tf');
   if (!btn) return;
   document.querySelectorAll('.tf').forEach(b => b.classList.toggle('active', b === btn));
@@ -864,6 +968,7 @@ $('marketSeg').addEventListener('click', e => {
   if (!btn) return;
   document.querySelectorAll('#marketSeg button').forEach(b => b.classList.toggle('active', b === btn));
   state.market = btn.dataset.market;
+  $('moMarket').value = state.market;
   loadFavorites().then(() => { loadBalance(); loadPositions(); loadPair(); });
 });
 $('pairStar').onclick = async () => {

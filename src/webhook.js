@@ -241,8 +241,12 @@ export function startWebhookServer() {
         const limit = Math.max(Number(url.searchParams.get('limit')) || 300, trend + 2);
         const dip = url.searchParams.get('dip') === 'true' || url.searchParams.get('dip') === '1';
         const dipLookback = Number(url.searchParams.get('dipLookback')) || undefined;
+        const rsi = url.searchParams.get('rsi') === 'true' || url.searchParams.get('rsi') === '1';
+        const rsiPeriod = Number(url.searchParams.get('rsiPeriod')) || undefined;
+        const rsiOversold = Number(url.searchParams.get('rsiOversold')) || undefined;
+        const rsiOverbought = Number(url.searchParams.get('rsiOverbought')) || undefined;
         const candles = await exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
-        const chart = buildChart(candles, { fast, slow, trend, dip, dipLookback });
+        const chart = buildChart(candles, { fast, slow, trend, dip, dipLookback, rsi, rsiPeriod, rsiOversold, rsiOverbought });
 
         let position = null;
         if (market === 'future') {

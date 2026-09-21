@@ -239,6 +239,10 @@ export async function getPositions(profileId) {
       entryPrice: entry.entryPrice,
       markPrice: entry.markPrice,
       unrealizedPnl: entry.unrealizedPnl,
-      leverage: entry.leverage
+      leverage: entry.leverage,
+      percentage: entry.percentage ?? null,
+      liquidationPrice: entry.liquidationPrice ?? null,
+      margin: entry.collateral ?? entry.initialMargin ?? null,
+      notional: entry.notional ?? null
     }));
 }

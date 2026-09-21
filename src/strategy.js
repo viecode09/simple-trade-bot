@@ -4,7 +4,7 @@ import { getExchange, getProfile, marketAllowed, normalizeMarket } from './excha
 import { executeAction, resolveSymbol } from './trader.js';
 import { describeError } from './errors.js';
 
-export const MA_DEFAULTS = { fast: 7, slow: 25, trend: 99, timeframe: '15m', interval: 30, dipLookback: 3 };
+export const MA_DEFAULTS = { fast: 7, slow: 25, trend: 99, timeframe: '15m', interval: 30, dipLookback: 3, rsiPeriod: 14, rsiOversold: 30, rsiOverbought: 70 };
 
 export function smaSeries(values, period) {
   const out = new Array(values.length).fill(null);
@@ -17,6 +17,30 @@ export function smaSeries(values, period) {
     if (i >= period - 1) {
       out[i] = sum / period;
     }
+  }
+  return out;
+}
+
+export function rsiSeries(values, period = 14) {
+  const out = new Array(values.length).fill(null);
+  if (values.length < period + 1) {
+    return out;
+  }
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i <= period; i += 1) {
+    const diff = values[i] - values[i - 1];
+    if (diff >= 0) gain += diff;
+    else loss -= diff;
+  }
+  let avgGain = gain / period;
+  let avgLoss = loss / period;
+  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < values.length; i += 1) {
+    const diff = values[i] - values[i - 1];
+    avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   }
   return out;
 }
@@ -70,6 +94,21 @@ export function analyze(candles, options = {}) {
   }
   const dipLong = dip && dipped && reclaim && trendUp;
 
+  const rsiEnabled = options.rsi === true || options.rsi === 'true';
+  const rsiPeriod = Number(options.rsiPeriod) > 0 ? Math.floor(Number(options.rsiPeriod)) : MA_DEFAULTS.rsiPeriod;
+  const rsiOversold = Number(options.rsiOversold) > 0 ? Number(options.rsiOversold) : MA_DEFAULTS.rsiOversold;
+  const rsiOverbought = Number(options.rsiOverbought) > 0 ? Number(options.rsiOverbought) : MA_DEFAULTS.rsiOverbought;
+  const rsiArr = rsiSeries(closes, rsiPeriod);
+  const rsiNow = rsiArr[i] ?? null;
+  const rsiPrev = rsiArr[i - 1] ?? null;
+
+  let rsiLong = false;
+  let rsiShort = false;
+  if (rsiEnabled && rsiNow != null && rsiPrev != null) {
+    rsiLong = rsiPrev <= rsiOversold && rsiNow > rsiOversold;
+    rsiShort = rsiPrev >= rsiOverbought && rsiNow < rsiOverbought;
+  }
+
   let signal = 'none';
   let reason = null;
   if (crossUp && trendUp) {
@@ -79,6 +118,12 @@ export function analyze(candles, options = {}) {
   } else if (dipLong) {
     signal = 'long';
     reason = `dip_catcher: pullback ke MA${slow} lalu reclaim di atas MA${slow} (tren > MA${trend})`;
+  } else if (rsiLong) {
+    signal = 'long';
+    reason = `RSI${rsiPeriod}: rebound dari oversold (${rsiPrev.toFixed(1)} -> ${rsiNow.toFixed(1)})`;
+  } else if (rsiShort) {
+    signal = 'short';
+    reason = `RSI${rsiPeriod}: turun dari overbought (${rsiPrev.toFixed(1)} -> ${rsiNow.toFixed(1)})`;
   } else {
     reason = dip && dipped && reclaim && !trendUp
       ? 'dip tapi tren di bawah MA99'
@@ -103,7 +148,15 @@ export function analyze(candles, options = {}) {
     dipLookback,
     dipped,
     reclaim,
-    dipLong
+    dipLong,
+    rsi: rsiNow,
+    rsiPrev,
+    rsiPeriod,
+    rsiOversold,
+    rsiOverbought,
+    rsiEnabled,
+    rsiLong,
+    rsiShort
   };
 }
 
@@ -131,6 +184,12 @@ export function buildChart(candles, options = {}) {
 
   const dip = options.dip === true || options.dip === 'true';
   const dipLookback = Number(options.dipLookback) > 0 ? Math.floor(Number(options.dipLookback)) : MA_DEFAULTS.dipLookback;
+
+  const rsiEnabled = options.rsi === true || options.rsi === 'true';
+  const rsiPeriod = Number(options.rsiPeriod) > 0 ? Math.floor(Number(options.rsiPeriod)) : MA_DEFAULTS.rsiPeriod;
+  const rsiOversold = Number(options.rsiOversold) > 0 ? Number(options.rsiOversold) : MA_DEFAULTS.rsiOversold;
+  const rsiOverbought = Number(options.rsiOverbought) > 0 ? Number(options.rsiOverbought) : MA_DEFAULTS.rsiOverbought;
+  const rsiArr = rsiSeries(closes, rsiPeriod);
 
   const markers = [];
   for (let i = 1; i < closes.length; i += 1) {
@@ -160,16 +219,28 @@ export function buildChart(candles, options = {}) {
       const reclaim = closes[i - 1] <= maSlow[i - 1] && closes[i] > maSlow[i];
       if (dipped && reclaim && closes[i] > maTrend[i]) {
         markers.push({ time, position: 'belowBar', color: '#d29922', shape: 'arrowUp', text: 'DIP' });
+        continue;
+      }
+    }
+
+    if (rsiEnabled && rsiArr[i] != null && rsiArr[i - 1] != null) {
+      const up = rsiArr[i - 1] <= rsiOversold && rsiArr[i] > rsiOversold;
+      const down = rsiArr[i - 1] >= rsiOverbought && rsiArr[i] < rsiOverbought;
+      if (up) {
+        markers.push({ time, position: 'belowBar', color: '#5b8def', shape: 'arrowUp', text: 'RSI' });
+      } else if (down) {
+        markers.push({ time, position: 'aboveBar', color: '#b06bff', shape: 'arrowDown', text: 'RSI' });
       }
     }
   }
 
   return {
-    params: { fast, slow, trend, dip, dipLookback },
+    params: { fast, slow, trend, dip, dipLookback, rsi: rsiEnabled, rsiPeriod, rsiOversold, rsiOverbought },
     candles: chartCandles,
     ma: { fast: line(maFast), slow: line(maSlow), trend: line(maTrend) },
+    rsi: line(rsiArr),
     markers,
-    analysis: analyze(candles, { fast, slow, trend, dip, dipLookback })
+    analysis: analyze(candles, { fast, slow, trend, dip, dipLookback, rsi: rsiEnabled, rsiPeriod, rsiOversold, rsiOverbought })
   };
 }
 
