@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>simple-trade-bot</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -11,11 +12,13 @@
     margin: 0; padding: 24px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     background: #0d1117; color: #e6edf3; font-size: 14px;
   }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  h3 { margin: 20px 0 8px; font-size: 13px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  h1 { font-size: 18px; margin: 0 0 16px; display: flex; align-items: center; gap: 12px; }
+  h3 { margin: 18px 0 8px; font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .card.main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .card.main { grid-template-columns: 1fr; } }
   label { display: flex; flex-direction: column; gap: 4px; color: #8b949e; font-size: 12px; }
   input, select {
     background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
@@ -28,16 +31,26 @@
   button.ghost { background: #21262d; border-color: #30363d; }
   button:hover { filter: brightness(1.15); }
   table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; white-space: nowrap; }
   th { color: #8b949e; font-weight: 400; }
   pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px; overflow: auto; white-space: pre-wrap; }
-  .msg { margin-left: 10px; color: #8b949e; }
-  .ok { color: #3fb950; }
-  .err { color: #f85149; }
+  .msg { color: #8b949e; font-size: 12px; }
+  .ok { color: #3fb950; } .err { color: #f85149; } .warn { color: #d29922; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #f85149; }
+  .dot.on { background: #3fb950; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #21262d; border: 1px solid #30363d; }
+  .badge.long { background: #12351f; border-color: #2ea043; color: #3fb950; }
+  .badge.short { background: #3d1418; border-color: #f85149; color: #f85149; }
+  .badge.flat { color: #8b949e; }
+  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #21262d; }
+  .stat span:first-child { color: #8b949e; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: #8b949e; margin: 6px 0; }
+  .legend i { width: 10px; height: 10px; display: inline-block; margin-right: 4px; }
+  #chart { width: 100%; height: 380px; }
 </style>
 </head>
 <body>
-  <h1>simple-trade-bot</h1>
+  <h1>simple-trade-bot <span id="streamDot" class="dot" title="stream"></span></h1>
 
   <section class="card">
     <div class="row">
@@ -49,25 +62,74 @@
     </div>
   </section>
 
+  <section class="card main">
+    <div>
+      <div class="row">
+        <label>Profile <select id="profile"></select></label>
+        <label>Market <select id="balMarket"><option>spot</option><option>future</option></select></label>
+        <button id="loadBal" class="ghost">Refresh</button>
+      </div>
+      <h3>Saldo Binance (live)</h3>
+      <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div>
+      <div class="row">
+        <label>Interval stream (s) <select id="streamInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
+      </div>
+      <h3>Open posisi futures (live)</h3>
+      <table id="posTable"><thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th></tr></thead><tbody></tbody></table>
+      <div id="streamMsg" class="msg"></div>
+    </div>
+  </section>
+
   <section class="card">
     <div class="row">
-      <label>Profile <select id="profile"></select></label>
-      <label>Market (saldo) <select id="balMarket"><option>spot</option><option>future</option></select></label>
-      <button id="loadBal" class="ghost">Muat saldo</button>
-      <button id="loadPos" class="ghost">Muat posisi</button>
+      <label>Ticker <input id="cTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
+      <label>Market <select id="cMarket"><option>future</option><option>spot</option></select></label>
+      <label>Timeframe <select id="cTimeframe"></select></label>
+      <label>MA fast <input id="cFast" type="number" value="7"></label>
+      <label>MA slow <input id="cSlow" type="number" value="25"></label>
+      <label>MA trend <input id="cTrend" type="number" value="99"></label>
+      <button id="loadChart">Muat chart</button>
+      <span id="chartMsg" class="msg"></span>
     </div>
-    <div id="status" class="msg"></div>
-    <h3>Saldo</h3>
-    <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
-    <h3>Posisi futures</h3>
-    <table id="posTable"><thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th></tr></thead><tbody></tbody></table>
+    <div class="legend">
+      <span><i style="background:#f5d90a"></i>MA fast</span>
+      <span><i style="background:#58a6ff"></i>MA slow</span>
+      <span><i style="background:#bc8cff"></i>MA trend</span>
+      <span><i style="background:#3fb950"></i>signal L</span>
+      <span><i style="background:#f85149"></i>signal S</span>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card">
+    <h3>Analisa MA</h3>
+    <div class="row" style="margin-bottom:8px">
+      <span id="aSignal" class="badge flat">-</span>
+      <span id="aReason" class="msg"></span>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+      <div>
+        <div class="stat"><span>Symbol</span><span id="aSymbol">-</span></div>
+        <div class="stat"><span>Harga (close)</span><span id="aPrice">-</span></div>
+        <div class="stat"><span>Candle close</span><span id="aTime">-</span></div>
+        <div class="stat"><span>Cross terakhir</span><span id="aCross">-</span></div>
+      </div>
+      <div>
+        <div class="stat"><span id="aFastLabel">MA fast</span><span id="aFast">-</span></div>
+        <div class="stat"><span id="aSlowLabel">MA slow</span><span id="aSlow">-</span></div>
+        <div class="stat"><span id="aTrendLabel">MA trend</span><span id="aTrend">-</span></div>
+        <div class="stat"><span>Posisi saat ini</span><span id="aPos">-</span></div>
+      </div>
+    </div>
   </section>
 
   <section class="card">
     <h3>Order manual</h3>
     <div class="grid">
       <label>Market <select id="oMarket"><option>spot</option><option>future</option></select></label>
-      <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
+      <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"></label>
       <label>Action <select id="oAction"><option>long</option><option>short</option><option>close</option></select></label>
       <label>Amount <input id="oAmount" type="number" step="any" placeholder="50"></label>
       <label>Amount type <select id="oAmountType"><option>quote</option><option>base</option></select></label>
@@ -83,65 +145,184 @@
 <script>
 const $ = id => document.getElementById(id);
 const secretInput = $('secret');
-
+const streamDot = $('streamDot');
 secretInput.value = localStorage.getItem('stb_secret') || '';
 
+let stream = null;
+let chart = null;
+let candleSeries = null;
+let maSeries = { fast: null, slow: null, trend: null };
+let meta = {};
+
+function headers(extra) {
+  return Object.assign({ 'x-webhook-secret': secretInput.value }, extra || {});
+}
+
 async function api(path, options = {}) {
-  const headers = Object.assign({ 'x-webhook-secret': secretInput.value }, options.headers || {});
-  const res = await fetch(path, Object.assign({}, options, { headers }));
+  const res = await fetch(path, Object.assign({}, options, { headers: headers(options.headers) }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
 
-function setMsg(el, text, ok = true) {
+function setMsg(el, text, cls = 'msg') {
   el.textContent = text;
-  el.className = 'msg ' + (ok ? 'ok' : 'err');
+  el.className = cls;
+}
+
+function fill(select, values, selected) {
+  select.innerHTML = values.map(v => `<option>${v}</option>`).join('');
+  if (selected) select.value = selected;
+}
+
+function num(v, digits = 4) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: digits }) : v ?? '-';
+}
+
+function pnlClass(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return '';
+  return n > 0 ? 'ok' : 'err';
 }
 
 $('save').onclick = () => {
   localStorage.setItem('stb_secret', secretInput.value);
-  setMsg($('authmsg'), 'secret disimpan');
-  loadMeta();
+  setMsg($('authmsg'), 'secret disimpan', 'msg ok');
+  bootstrap();
 };
 
-function fill(select, values) {
-  select.innerHTML = values.map(v => `<option>${v}</option>`).join('');
+async function loadMeta() {
+  meta = await api('/api/meta');
+  fill($('profile'), meta.profiles.length ? meta.profiles : [meta.defaultProfile], meta.defaultProfile);
+  $('tickers').innerHTML = meta.tickers.map(t => `<option value="${t}">`).join('');
+  fill($('cTimeframe'), meta.timeframes, '15m');
+  if (meta.maDefaults) {
+    $('cFast').value = meta.maDefaults.fast;
+    $('cSlow').value = meta.maDefaults.slow;
+    $('cTrend').value = meta.maDefaults.trend;
+  }
+  setMsg($('authmsg'), 'secret valid', 'msg ok');
 }
 
-async function loadMeta() {
+function renderBalance(rows) {
+  $('balTable').querySelector('tbody').innerHTML =
+    rows.map(r => `<tr><td>${r.currency}</td><td>${num(r.total, 8)}</td><td>${num(r.free, 8)}</td><td>${num(r.used, 8)}</td></tr>`).join('')
+    || '<tr><td colspan="4">kosong</td></tr>';
+}
+
+function renderPositions(rows) {
+  $('posTable').querySelector('tbody').innerHTML =
+    rows.map(r => `<tr><td>${r.symbol}</td><td>${r.side}</td><td>${num(r.contracts)}</td><td>${num(r.entryPrice, 8)}</td><td>${num(r.markPrice, 8)}</td><td class="${pnlClass(r.unrealizedPnl)}">${num(r.unrealizedPnl, 4)}</td><td>${r.leverage ?? '-'}</td></tr>`).join('')
+    || '<tr><td colspan="7">kosong</td></tr>';
+}
+
+function connectStream() {
+  if (stream) { stream.close(); stream = null; }
+  const profile = $('profile').value;
+  if (!profile || !secretInput.value) {
+    streamDot.classList.remove('on');
+    return;
+  }
+  const qs = new URLSearchParams({
+    secret: secretInput.value,
+    profile,
+    market: $('balMarket').value,
+    interval: $('streamInterval').value
+  });
+  stream = new EventSource('/api/stream?' + qs.toString());
+
+  stream.addEventListener('balance', e => {
+    streamDot.classList.add('on');
+    setMsg($('streamMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
+    renderBalance(JSON.parse(e.data).balances);
+  });
+  stream.addEventListener('positions', e => {
+    renderPositions(JSON.parse(e.data).positions);
+  });
+  stream.addEventListener('streamerror', e => {
+    if (e.data) {
+      const d = JSON.parse(e.data);
+      setMsg($('streamMsg'), d.scope + ': ' + d.error, 'msg err');
+    }
+  });
+  stream.onerror = () => {
+    streamDot.classList.remove('on');
+    setMsg($('streamMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
+  };
+}
+
+$('loadBal').onclick = connectStream;
+$('profile').onchange = connectStream;
+$('balMarket').onchange = connectStream;
+$('streamInterval').onchange = connectStream;
+
+function ensureChart() {
+  if (chart) return;
+  chart = LightweightCharts.createChart($('chart'), {
+    layout: { background: { color: '#161b22' }, textColor: '#8b949e' },
+    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+    rightPriceScale: { borderColor: '#30363d' },
+    timeScale: { borderColor: '#30363d', timeVisible: true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#3fb950', downColor: '#f85149', borderVisible: false,
+    wickUpColor: '#3fb950', wickDownColor: '#f85149'
+  });
+  maSeries.fast = chart.addLineSeries({ color: '#f5d90a', lineWidth: 1 });
+  maSeries.slow = chart.addLineSeries({ color: '#58a6ff', lineWidth: 1 });
+  maSeries.trend = chart.addLineSeries({ color: '#bc8cff', lineWidth: 1 });
+  new ResizeObserver(() => chart.applyOptions({ width: $('chart').clientWidth })).observe($('chart'));
+}
+
+function renderAnalysis(a, symbol) {
+  const cls = a.signal === 'long' ? 'badge long' : a.signal === 'short' ? 'badge short' : 'badge flat';
+  $('aSignal').className = cls;
+  $('aSignal').textContent = a.signal.toUpperCase();
+  $('aReason').textContent = a.reason || '';
+  $('aSymbol').textContent = symbol;
+  $('aPrice').textContent = num(a.price, 8);
+  $('aTime').textContent = a.candleTime || '-';
+  $('aCross').textContent = a.crossUp ? 'MA fast cross UP' : a.crossDown ? 'MA fast cross DOWN' : 'belum ada';
+  $('aFastLabel').textContent = 'MA ' + a.fast;
+  $('aSlowLabel').textContent = 'MA ' + a.slow;
+  $('aTrendLabel').textContent = 'MA ' + a.trend;
+  $('aFast').textContent = num(a.maFast, 8);
+  $('aSlow').textContent = num(a.maSlow, 8);
+  $('aTrend').textContent = num(a.maTrend, 8);
+}
+
+async function loadChart() {
+  setMsg($('chartMsg'), 'memuat...');
   try {
-    const meta = await api('/api/meta');
-    fill($('profile'), meta.profiles.length ? meta.profiles : [meta.defaultProfile]);
-    if (meta.defaultProfile) $('profile').value = meta.defaultProfile;
-    $('tickers').innerHTML = meta.tickers.map(t => `<option value="${t}">`).join('');
-    setMsg($('authmsg'), 'secret valid', true);
+    const qs = new URLSearchParams({
+      profile: $('profile').value,
+      market: $('cMarket').value,
+      symbol: $('cTicker').value,
+      timeframe: $('cTimeframe').value,
+      fast: $('cFast').value,
+      slow: $('cSlow').value,
+      trend: $('cTrend').value,
+      limit: 400
+    });
+    const data = await api('/api/candles?' + qs.toString());
+    ensureChart();
+    candleSeries.setData(data.candles);
+    maSeries.fast.setData(data.ma.fast);
+    maSeries.slow.setData(data.ma.slow);
+    maSeries.trend.setData(data.ma.trend);
+    candleSeries.setMarkers(data.markers || []);
+    chart.timeScale().fitContent();
+    renderAnalysis(data.analysis, data.symbol);
+    $('aPos').textContent = data.position ? data.position.side + ' ' + data.position.contracts : 'flat';
+    setMsg($('chartMsg'), data.symbol + ' • ' + data.timeframe, 'msg ok');
   } catch (e) {
-    setMsg($('authmsg'), e.message, false);
+    setMsg($('chartMsg'), e.message, 'msg err');
   }
 }
 
-function cells(row) { return row.map(v => `<td>${v ?? ''}</td>`).join(''); }
-
-$('loadBal').onclick = async () => {
-  setMsg($('status'), 'memuat...');
-  try {
-    const data = await api('/api/balance?profile=' + encodeURIComponent($('profile').value) + '&market=' + $('balMarket').value);
-    const rows = data.balances;
-    $('balTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.currency, r.total, r.free, r.used])}</tr>`).join('') || '<tr><td colspan="4">kosong</td></tr>';
-    setMsg($('status'), rows.length + ' aset');
-  } catch (e) { setMsg($('status'), e.message, false); }
-};
-
-$('loadPos').onclick = async () => {
-  setMsg($('status'), 'memuat...');
-  try {
-    const data = await api('/api/positions?profile=' + encodeURIComponent($('profile').value));
-    const rows = data.positions;
-    $('posTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>${cells([r.symbol, r.side, r.contracts, r.entryPrice, r.markPrice, r.unrealizedPnl, r.leverage])}</tr>`).join('') || '<tr><td colspan="7">kosong</td></tr>';
-    setMsg($('status'), rows.length + ' posisi');
-  } catch (e) { setMsg($('status'), e.message, false); }
-};
+$('loadChart').onclick = loadChart;
 
 $('send').onclick = async () => {
   setMsg($('ordermsg'), 'mengirim...');
@@ -162,14 +343,24 @@ $('send').onclick = async () => {
       body: JSON.stringify(body)
     });
     $('result').textContent = JSON.stringify(data, null, 2);
-    setMsg($('ordermsg'), 'order terkirim');
+    setMsg($('ordermsg'), 'order terkirim', 'msg ok');
   } catch (e) {
     $('result').textContent = e.message;
-    setMsg($('ordermsg'), e.message, false);
+    setMsg($('ordermsg'), e.message, 'msg err');
   }
 };
 
-if (secretInput.value) loadMeta();
+async function bootstrap() {
+  if (!secretInput.value) return;
+  try {
+    await loadMeta();
+    connectStream();
+  } catch (e) {
+    setMsg($('authmsg'), e.message, 'msg err');
+  }
+}
+
+bootstrap();
 </script>
 </body>
 </html>

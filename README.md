@@ -34,11 +34,21 @@ Endpoint:
 ## Dashboard
 
 Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** di halaman (harus sama dengan `WEBHOOK_SECRET`), lalu:
-- **Muat saldo** — saldo spot/futures per profile.
-- **Muat posisi** — posisi futures terbuka.
+- **Saldo Binance (live)** — streaming saldo spot/futures via SSE, refresh otomatis tiap N detik.
+- **Open posisi futures (live)** — streaming posisi terbuka beserta PnL, entry, mark, leverage.
+- **Chart** — candlestick dengan overlay MA fast/slow/trend (default 7/25/99) plus marker sinyal L/S, sumber candle dari exchange (ccxt).
+- **Analisa MA** — sinyal (long/short/none), harga, nilai MA, status cross, alasan, dan posisi saat ini.
 - **Order manual** — form buy/sell/close tanpa perlu TradingView.
 
-Dashboard memanggil API internal (`/api/meta`, `/api/balance`, `/api/positions`, `/api/order`) yang semuanya butuh secret (`x-webhook-secret`). Tanpa secret, data tidak bisa diakses.
+Endpoint internal (semua butuh secret):
+- `GET /api/meta` — daftar profile, ticker, timeframe, default MA.
+- `GET /api/balance?profile=&market=` — saldo.
+- `GET /api/positions?profile=` — posisi futures.
+- `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=` — candle + MA + marker + analisa.
+- `GET /api/stream?secret=&profile=&market=&interval=` — Server-Sent Events saldo & posisi.
+- `POST /api/order` — order (sama seperti `/webhook`).
+
+Secret dikirim lewat header `x-webhook-secret`; khusus SSE lewat query `secret` karena `EventSource` tidak bisa mengirim header (gunakan HTTPS saat diekspos).
 
 ## Format alert TradingView
 

@@ -2,7 +2,9 @@ import http from 'node:http';
 import fs from 'node:fs';
 import { loadConfig } from './config.js';
 import { logger } from './logger.js';
-import { executeAction, getBalance, getPositions } from './trader.js';
+import { executeAction, getBalance, getPositions, resolveSymbol } from './trader.js';
+import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
+import { buildChart, MA_DEFAULTS } from './strategy.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -75,7 +77,9 @@ function buildMeta(config) {
     defaultProfile: config.defaultProfile,
     profiles: (config.profiles || []).map(profile => profile.id),
     tickers: Object.keys(config.symbolMap || {}),
-    markets: ['spot', 'future']
+    markets: ['spot', 'future'],
+    timeframes: ['1m', '5m', '15m', '1h', '4h', '1d'],
+    maDefaults: MA_DEFAULTS
   };
 }
 
@@ -134,6 +138,89 @@ export function startWebhookServer() {
         }
         const positions = await getPositions(url.searchParams.get('profile'));
         sendJson(res, 200, { ok: true, positions });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/api/candles') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const profile = getProfile(url.searchParams.get('profile'));
+        const market = normalizeMarket(url.searchParams.get('market'));
+        if (!marketAllowed(profile, market)) {
+          throw new Error(`Market "${market}" is disabled for profile "${profile.id}"`);
+        }
+        const exchange = getExchange(profile, market);
+        await exchange.loadMarkets();
+        const symbol = resolveSymbol(config, url.searchParams.get('symbol') || url.searchParams.get('ticker'), market);
+        const timeframe = url.searchParams.get('timeframe') || MA_DEFAULTS.timeframe;
+        const fast = Number(url.searchParams.get('fast')) || MA_DEFAULTS.fast;
+        const slow = Number(url.searchParams.get('slow')) || MA_DEFAULTS.slow;
+        const trend = Number(url.searchParams.get('trend')) || MA_DEFAULTS.trend;
+        const limit = Math.max(Number(url.searchParams.get('limit')) || 300, trend + 2);
+        const candles = await exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
+        const chart = buildChart(candles, { fast, slow, trend });
+
+        let position = null;
+        if (market === 'future') {
+          try {
+            const positions = await getPositions(profile.id);
+            position = positions.find(entry => entry.symbol === symbol) || null;
+          } catch {
+            position = null;
+          }
+        }
+
+        sendJson(res, 200, { ok: true, profile: profile.id, market, symbol, timeframe, ...chart, position });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/api/stream') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+
+        const profileId = url.searchParams.get('profile');
+        const market = normalizeMarket(url.searchParams.get('market'));
+        const interval = Math.max(2, Number(url.searchParams.get('interval')) || 5) * 1000;
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive'
+        });
+
+        let closed = false;
+        const send = (event, data) => {
+          if (!closed) {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          }
+        };
+
+        req.on('close', () => {
+          closed = true;
+        });
+
+        const tick = async () => {
+          if (closed) return;
+          try {
+            send('balance', { market, balances: await getBalance(profileId, market) });
+          } catch (e) {
+            send('streamerror', { scope: 'balance', error: e.message || String(e) });
+          }
+          try {
+            send('positions', { positions: await getPositions(profileId) });
+          } catch (e) {
+            send('streamerror', { scope: 'positions', error: e.message || String(e) });
+          }
+          if (!closed) {
+            setTimeout(tick, interval);
+          }
+        };
+
+        tick();
         return;
       }
 

@@ -79,6 +79,53 @@ export function analyze(candles, options = {}) {
   };
 }
 
+export function buildChart(candles, options = {}) {
+  const fast = options.fast ?? MA_DEFAULTS.fast;
+  const slow = options.slow ?? MA_DEFAULTS.slow;
+  const trend = options.trend ?? MA_DEFAULTS.trend;
+
+  const closes = candles.map(candle => Number(candle[4]));
+  const maFast = smaSeries(closes, fast);
+  const maSlow = smaSeries(closes, slow);
+  const maTrend = smaSeries(closes, trend);
+
+  const line = series => series
+    .map((value, i) => (value == null ? null : { time: Math.floor(candles[i][0] / 1000), value }))
+    .filter(Boolean);
+
+  const chartCandles = candles.map(candle => ({
+    time: Math.floor(candle[0] / 1000),
+    open: Number(candle[1]),
+    high: Number(candle[2]),
+    low: Number(candle[3]),
+    close: Number(candle[4])
+  }));
+
+  const markers = [];
+  for (let i = 1; i < closes.length; i += 1) {
+    if (maFast[i - 1] == null || maSlow[i - 1] == null) continue;
+    const crossUp = maFast[i - 1] <= maSlow[i - 1] && maFast[i] > maSlow[i];
+    const crossDown = maFast[i - 1] >= maSlow[i - 1] && maFast[i] < maSlow[i];
+    if (!crossUp && !crossDown) continue;
+    const trendOk = maTrend[i] != null;
+    const time = Math.floor(candles[i][0] / 1000);
+    if (crossUp && trendOk && closes[i] > maTrend[i]) {
+      markers.push({ time, position: 'belowBar', color: '#3fb950', shape: 'arrowUp', text: `L${fast}/${slow}` });
+    }
+    if (crossDown && trendOk && closes[i] < maTrend[i]) {
+      markers.push({ time, position: 'aboveBar', color: '#f85149', shape: 'arrowDown', text: `S${fast}/${slow}` });
+    }
+  }
+
+  return {
+    params: { fast, slow, trend },
+    candles: chartCandles,
+    ma: { fast: line(maFast), slow: line(maSlow), trend: line(maTrend) },
+    markers,
+    analysis: analyze(candles, { fast, slow, trend })
+  };
+}
+
 export function decideAction(position, signal, market) {
   if (signal === 'long') {
     if (position === 'long') return 'hold';
