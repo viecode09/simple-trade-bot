@@ -722,6 +722,7 @@ async function loadPair() {
     renderAnalysis(null, null, null);
   }
   loadPositions();
+  loadBalance();
 }
 
 function computeIndicators(candles) {
@@ -1016,7 +1017,7 @@ function switchTab(tab) {
   document.querySelectorAll('.positions .tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   $('tabPositions').classList.toggle('hidden', tab !== 'positions');
   $('tabOrders').classList.toggle('hidden', tab !== 'orders');
-  if (tab === 'orders') loadOrders(); else loadPositions();
+  if (tab === 'orders') loadOrders(); else { loadPositions(); loadBalance(); }
 }
 
 document.querySelectorAll('.positions .tab').forEach(btn => {
