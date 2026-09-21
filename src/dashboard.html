@@ -388,7 +388,7 @@
       </div>
       <div id="tabPositions">
         <table>
-          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
+          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>Liq. Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
           <tbody id="posRows"></tbody>
         </table>
         <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
@@ -653,9 +653,11 @@ function renderManualPreview() {
   }
   const tp = p.tpPrice ? fmtPrice(p.tpPrice) : '-';
   const sl = p.slPrice ? fmtPrice(p.slPrice) : '-';
+  const warn = slLiquidationWarning({ entry: p.price, dir: p.dir, leverage: p.lev }, p.slPrice, $('moTicker').value.trim() || state.ticker);
   el.innerHTML = `Entry ~${fmtPrice(p.price)} · Leverage ${p.lev}x<br>` +
     `<span class="up">Take Profit / Potensi Profit: ${tp} / +${fmt(p.tpUsdt, 2)} USDT (+${fmt(p.profitPct, 2)}%)</span><br>` +
-    `<span class="down">Stop Loss / Potensi Loss: ${sl} / -${fmt(p.slUsdt, 2)} USDT (-${fmt(p.lossPct, 2)}%)</span>`;
+    `<span class="down">Stop Loss / Potensi Loss: ${sl} / -${fmt(p.slUsdt, 2)} USDT (-${fmt(p.lossPct, 2)}%)</span>` +
+    (warn ? `<br><span class="down">${warn}</span>` : '');
 }
 
 ['moAmount', 'moTp', 'moSl', 'moPrice', 'moLeverage', 'moAction', 'moMarket'].forEach(id => {
@@ -941,6 +943,7 @@ async function loadPositions() {
       <td><span class="side-tag ${p.side === 'long' ? 'long' : 'short'}">${String(p.side || '').toUpperCase()}</span></td>
       <td>${fmtPrice(p.entryPrice)}</td>
       <td>${fmtPrice(p.markPrice)}</td>
+      <td>${p.liquidationPrice != null && Number(p.liquidationPrice) > 0 ? fmtPrice(p.liquidationPrice) : '-'}</td>
       <td class="${(Number(p.unrealizedPnl) || 0) >= 0 ? 'up' : 'down'}">${fmt(p.unrealizedPnl, 2)}</td>
       <td class="${risk.cls}">${risk.level}${risk.dist != null ? ' (' + risk.dist.toFixed(1) + '%)' : ''}</td>
       <td class="${reco.cls}">${reco.label}</td>
@@ -1103,7 +1106,8 @@ function confirmTrade(side, pair, posSide, execTicker) {
   };
   const plRows = isClose ? '' : `
       <div class="kv"><span class="k">Take Profit / Potensi Profit</span><span class="v up" id="plProfit">-</span></div>
-      <div class="kv"><span class="k">Stop Loss / Potensi Loss</span><span class="v down" id="plLoss">-</span></div>`;
+      <div class="kv"><span class="k">Stop Loss / Potensi Loss</span><span class="v down" id="plLoss">-</span></div>
+      <div id="plWarn" class="down" style="font-size:11px; line-height:1.5"></div>`;
 
   const label = isClose ? 'Tutup Posisi' : 'Konfirmasi Order';
   openModal(`
@@ -1116,37 +1120,74 @@ function confirmTrade(side, pair, posSide, execTicker) {
       <div class="kv"><span class="k">Entry</span><span class="v">${rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-'}</span></div>
       ${plRows}
       ${isClose ? '' : '<div class="field"><label>Amount (USDT)</label><input id="tradeAmount" type="number" value="10"></div>'}
-      <div class="muted" style="font-size:11px">Order akan dikirim ke Binance setelah konfirmasi.</div>
+      ${isClose ? '' : `<div class="grid2">
+        <div class="field"><label>Reward (USDT)</label><input id="twReward" type="number" step="any" placeholder="opsional"></div>
+        <div class="field"><label>Risk (USDT)</label><input id="twRisk" type="number" step="any" placeholder="opsional"></div>
+      </div>`}
+      <div class="muted" style="font-size:11px">Reward/Risk kosong = pakai TP/SL rekomendasi bot. Order akan dikirim ke Binance setelah konfirmasi.</div>
     </div>
     <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="tradeConfirm">Konfirmasi</button></div>`);
 
   if (!isClose) {
-    const amountEl = $('tradeAmount');
-    if (amountEl) amountEl.oninput = updatePotentialPL;
+    ['tradeAmount', 'twReward', 'twRisk'].forEach(id => {
+      const el = $(id);
+      if (el) el.oninput = updatePotentialPL;
+    });
     updatePotentialPL();
   }
+}
+
+function tradePricesFromModal() {
+  const pl = state.pendingPL || {};
+  const amountEl = $('tradeAmount');
+  const amount = amountEl ? Number(amountEl.value) || 0 : 0;
+  const rewardEl = $('twReward');
+  const riskEl = $('twRisk');
+  const reward = rewardEl ? Number(rewardEl.value) || 0 : 0;
+  const risk = riskEl ? Number(riskEl.value) || 0 : 0;
+  const notional = amount * (pl.leverage || 1);
+  let tpPrice = pl.tp ?? null;
+  let slPrice = pl.sl ?? null;
+  if (reward > 0 && pl.entry && notional > 0) tpPrice = pl.entry * (1 + pl.dir * (reward / notional));
+  if (risk > 0 && pl.entry && notional > 0) slPrice = pl.entry * (1 - pl.dir * (risk / notional));
+  return { amount, reward, risk, notional, tpPrice, slPrice, pl };
 }
 
 function updatePotentialPL() {
   const profitEl = $('plProfit');
   if (!profitEl) return;
   const lossEl = $('plLoss');
-  const pl = state.pendingPL || {};
-  const amountEl = $('tradeAmount');
-  const amount = amountEl ? Number(amountEl.value) || 0 : 0;
-  if (!pl.entry || pl.tp == null || pl.sl == null) {
+  const { amount, reward, risk, notional, tpPrice, slPrice, pl } = tradePricesFromModal();
+  if (!pl.entry || (tpPrice == null && slPrice == null)) {
     profitEl.textContent = '-';
     lossEl.textContent = '-';
     return;
   }
-  const notional = amount * (pl.leverage || 1);
-  const profit = notional * ((pl.tp - pl.entry) / pl.entry) * pl.dir;
-  const loss = notional * ((pl.sl - pl.entry) / pl.entry) * pl.dir;
-  const pctOf = amt => (amt ? amt / amount * 100 : 0);
-  const profitPct = pctOf(profit);
-  const lossPct = pctOf(loss);
-  profitEl.textContent = fmtPrice(pl.tp) + ' / ' + (profit >= 0 ? '+' : '') + fmt(profit, 2) + ' USDT (' + (profitPct >= 0 ? '+' : '') + fmt(profitPct, 2) + '%)';
-  lossEl.textContent = fmtPrice(pl.sl) + ' / ' + (loss >= 0 ? '+' : '') + fmt(loss, 2) + ' USDT (' + (lossPct >= 0 ? '+' : '') + fmt(lossPct, 2) + '%)';
+  const profit = (reward > 0) ? reward : (tpPrice != null ? notional * ((tpPrice - pl.entry) / pl.entry) * pl.dir : 0);
+  const loss = (risk > 0) ? risk : (slPrice != null ? notional * ((slPrice - pl.entry) / pl.entry) * pl.dir : 0);
+  const profitPct = amount ? profit / amount * 100 : 0;
+  const lossPct = amount ? loss / amount * 100 : 0;
+  profitEl.textContent = (tpPrice != null ? fmtPrice(tpPrice) : '-') + ' / ' + (profit >= 0 ? '+' : '') + fmt(profit, 2) + ' USDT (' + (profitPct >= 0 ? '+' : '') + fmt(profitPct, 2) + '%)';
+  lossEl.textContent = (slPrice != null ? fmtPrice(slPrice) : '-') + ' / ' + (loss >= 0 ? '+' : '') + fmt(loss, 2) + ' USDT (' + (lossPct >= 0 ? '+' : '') + fmt(lossPct, 2) + '%)';
+  const warnEl = $('plWarn');
+  if (warnEl) warnEl.textContent = slLiquidationWarning({ ...pl, entry: pl.entry }, slPrice);
+}
+
+function liquidationFor(pl, ticker) {
+  const base = baseOf(ticker || (state.pending && state.pending.ticker) || state.ticker || '');
+  const pos = (state.positions || []).find(p => baseOf(p.symbol) === base && Number(p.liquidationPrice) > 0);
+  if (pos) return Number(pos.liquidationPrice);
+  if (!pl.entry || !pl.leverage) return null;
+  return pl.entry * (1 - pl.dir * (1 / pl.leverage));
+}
+
+function slLiquidationWarning(pl, slPrice, ticker) {
+  if (slPrice == null) return '';
+  const liq = liquidationFor(pl, ticker);
+  if (liq == null || !(liq > 0)) return '';
+  const beyond = (pl.dir === 1 && slPrice <= liq) || (pl.dir === -1 && slPrice >= liq);
+  if (!beyond) return '';
+  return `⚠ Peringatan: SL ${fmtPrice(slPrice)} melewati estimasi liq. ${fmtPrice(liq)} — posisi bisa terlikuidasi sebelum SL. Kurangi leverage atau dekatkan SL.`;
 }
 
 async function executeOrder(body) {
@@ -1168,8 +1209,8 @@ async function executeOrder(body) {
 
 async function executePending() {
   const p = state.pending || {};
-  const amountEl = $('tradeAmount');
-  const amount = amountEl && amountEl.value ? Number(amountEl.value) : undefined;
+  const prices = p.action === 'long' || p.action === 'short' ? tradePricesFromModal() : { amount: ($('tradeAmount') ? Number($('tradeAmount').value) : undefined) };
+  const amount = prices.amount;
   closeModal();
   if (p.action !== 'close' && !amount) { toast('Amount wajib diisi', 'err'); return; }
   const body = {
@@ -1180,10 +1221,9 @@ async function executePending() {
     amount: p.action === 'close' ? undefined : amount,
     amountType: p.amountType
   };
-  const pl = state.pendingPL || {};
   if (p.action === 'long' || p.action === 'short') {
-    if (pl.tp != null) body.takeProfit = pl.tp;
-    if (pl.sl != null) body.stopLoss = pl.sl;
+    if (prices.tpPrice != null) body.takeProfit = prices.tpPrice;
+    if (prices.slPrice != null) body.stopLoss = prices.slPrice;
   }
   await executeOrder(body);
 }
@@ -1243,11 +1283,13 @@ function confirmManual() {
   if (order.action === 'stop' && !pl.slPrice) { toast('Isi Stop Loss (USDT) & Amount untuk aksi Stop', 'err'); return; }
   const lev = order.market === 'future' ? ($('moLeverage').value || state.leverage) : null;
   const levRow = order.market === 'future' ? `<div class="kv"><span class="k">Leverage</span><span class="v">${lev ? lev + 'x' : '-'}</span></div>` : '';
+  const slWarn = slLiquidationWarning({ entry: pl.price, dir: pl.dir, leverage: pl.lev }, pl.slPrice, order.ticker);
   const plRows = order.action === 'stop'
     ? `<div class="kv"><span class="k">Stop Trigger (auto)</span><span class="v down">${fmtPrice(pl.slPrice)} / -${fmt(pl.slUsdt, 2)} USDT</span></div>`
     : (order.action === 'long' || order.action === 'short')
       ? `<div class="kv"><span class="k">Take Profit / Potensi Profit</span><span class="v up">${pl.tpPrice ? fmtPrice(pl.tpPrice) : '-'} / +${fmt(pl.tpUsdt, 2)} USDT (+${fmt(pl.profitPct, 2)}%)</span></div>
-      <div class="kv"><span class="k">Stop Loss / Potensi Loss</span><span class="v down">${pl.slPrice ? fmtPrice(pl.slPrice) : '-'} / -${fmt(pl.slUsdt, 2)} USDT (-${fmt(pl.lossPct, 2)}%)</span></div>`
+      <div class="kv"><span class="k">Stop Loss / Potensi Loss</span><span class="v down">${pl.slPrice ? fmtPrice(pl.slPrice) : '-'} / -${fmt(pl.slUsdt, 2)} USDT (-${fmt(pl.lossPct, 2)}%)</span></div>
+      ${slWarn ? `<div class="down" style="font-size:11px; line-height:1.5">${slWarn}</div>` : ''}`
       : '';
   openModal(`
     <div class="m-head"><h3>Konfirmasi Manual Order</h3><button class="close-x" data-close>×</button></div>

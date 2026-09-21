@@ -45,6 +45,21 @@ export function rsiSeries(values, period = 14) {
   return out;
 }
 
+export function atr(candles, period = 14) {
+  if (!Array.isArray(candles) || candles.length < period + 1) {
+    return null;
+  }
+  let sum = 0;
+  for (let i = candles.length - period; i < candles.length; i += 1) {
+    const prev = candles[i - 1];
+    const high = Number(candles[i][2]);
+    const low = Number(candles[i][3]);
+    const tr = Math.max(high - low, Math.abs(high - Number(prev[4])), Math.abs(low - Number(prev[4])));
+    sum += tr;
+  }
+  return sum / period;
+}
+
 export function analyze(candles, options = {}) {
   const fast = options.fast ?? MA_DEFAULTS.fast;
   const slow = options.slow ?? MA_DEFAULTS.slow;
@@ -325,6 +340,19 @@ async function evaluate(request) {
 
   const action = decideAction(position, analysis.signal, market);
 
+  let takeProfit = null;
+  let stopLoss = null;
+  const dir = action.includes('long') ? 1 : action.includes('short') ? -1 : 0;
+  if (dir !== 0) {
+    const atrVal = atr(candles, Number(request.atrPeriod) > 0 ? Math.floor(Number(request.atrPeriod)) : 14);
+    const tpMult = request.tpMult != null ? Number(request.tpMult) : 2;
+    const slMult = request.slMult != null ? Number(request.slMult) : 1;
+    if (atrVal) {
+      if (tpMult > 0) takeProfit = analysis.price + dir * atrVal * tpMult;
+      if (slMult > 0) stopLoss = analysis.price - dir * atrVal * slMult;
+    }
+  }
+
   return {
     profile: profile.id,
     market,
@@ -333,12 +361,16 @@ async function evaluate(request) {
     position,
     analysis,
     action,
+    takeProfit,
+    stopLoss,
     execRequest: {
       profileId: request.profileId,
       market,
       ticker: symbol,
       amount: request.amount,
-      amountType: request.amountType
+      amountType: request.amountType,
+      takeProfit,
+      stopLoss
     }
   };
 }

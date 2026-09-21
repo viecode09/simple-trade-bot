@@ -38,10 +38,11 @@ Usage:
       Stop market reduce-only di posisi futures (default seluruh contracts).
       Untuk long/short futures, --take-profit/--stop-loss otomatis memasang order TP/SL reduce-only.
 
-  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--rsi] [--rsi-period=14] [--rsi-oversold=30] [--rsi-overbought=70] [--dry-run] [--watch] [--interval=30]
+  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--rsi] [--rsi-period=14] [--rsi-oversold=30] [--rsi-overbought=70] [--tp-mult=2] [--sl-mult=1] [--atr-period=14] [--dry-run] [--watch] [--interval=30]
       MA cross strategy (long: MA7 cross up MA25 & price>MA99; short: MA7 cross down MA25 & price<MA99).
       --dip: aktifkan dip_catcher (long saat harga pullback ke MA slow lalu reclaim, selama di atas MA trend).
       --rsi: aktifkan strategi RSI (long saat RSI rebound dari oversold; short saat RSI turun dari overbought).
+      --tp-mult/--sl-mult: kelipatan ATR untuk Take Profit / Stop Loss otomatis (default 2 / 1; 0 = nonaktif).
 
 Examples:
   node src/index.js order --profile=binance1 --market=spot --symbol=BTCUSDT --action=long --amount=100
@@ -111,6 +112,9 @@ async function main() {
         rsiPeriod: args['rsi-period'] ? Number(args['rsi-period']) : undefined,
         rsiOversold: args['rsi-oversold'] ? Number(args['rsi-oversold']) : undefined,
         rsiOverbought: args['rsi-overbought'] ? Number(args['rsi-overbought']) : undefined,
+        tpMult: args['tp-mult'] ? Number(args['tp-mult']) : undefined,
+        slMult: args['sl-mult'] ? Number(args['sl-mult']) : undefined,
+        atrPeriod: args['atr-period'] ? Number(args['atr-period']) : undefined,
         dryRun: args['dry-run'] === true || args['dry-run'] === 'true'
       };
 
