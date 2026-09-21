@@ -258,6 +258,45 @@ export function startWebhookServer() {
         return;
       }
 
+      if (req.method === 'GET' && path === '/api/ticker') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const profile = getProfile(url.searchParams.get('profile'));
+        const market = normalizeMarket(url.searchParams.get('market'));
+        if (!marketAllowed(profile, market)) {
+          throw new Error(`Market "${market}" is disabled for profile "${profile.id}"`);
+        }
+        const exchange = getExchange(profile, market, { public: true });
+        await exchange.loadMarkets();
+        const symbol = resolveSymbol(config, url.searchParams.get('symbol') || url.searchParams.get('ticker'), market);
+        const t = await exchange.fetchTicker(symbol);
+        const last = t.last ?? t.close ?? null;
+        const open = t.open ?? null;
+        const change = (last != null && open != null) ? last - open : null;
+        const percentage = t.percentage ?? (change != null && open ? (change / open) * 100 : null);
+        sendJson(res, 200, {
+          ok: true,
+          profile: profile.id,
+          market,
+          symbol,
+          ticker: {
+            last,
+            open,
+            high: t.high ?? null,
+            low: t.low ?? null,
+            volume: t.baseVolume ?? null,
+            quoteVolume: t.quoteVolume ?? null,
+            change,
+            percentage,
+            bid: t.bid ?? null,
+            ask: t.ask ?? null
+          }
+        });
+        return;
+      }
+
       if (req.method === 'GET' && path === '/api/stream') {
         if (!secretValid(config, req, url, null)) {
           sendJson(res, 401, { ok: false, error: 'invalid secret' });

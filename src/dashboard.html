@@ -3,581 +3,907 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>simple-trade-bot</title>
+<title>Binance Trading Bot</title>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    --bg: #0b0e11;
+    --panel: #161a1e;
+    --panel-2: #1e2329;
+    --border: #2b3139;
+    --text: #eaecef;
+    --muted: #848e9c;
+    --yellow: #f0b90b;
+    --green: #0ecb81;
+    --red: #f6465d;
+    --radius: 10px;
+  }
   * { box-sizing: border-box; }
+  .hidden { display: none !important; }
+  html, body { height: 100%; }
   body {
-    margin: 0; padding: 24px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: #0d1117; color: #e6edf3; font-size: 14px;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
+    font-size: 13px;
+    display: grid;
+    grid-template-columns: 272px 1fr;
+    grid-template-rows: 64px 1fr;
+    grid-template-areas: "header header" "sidebar main";
+    height: 100vh;
+    overflow: hidden;
   }
-  h1 { font-size: 18px; margin: 0 0 16px; display: flex; align-items: center; gap: 12px; }
-  h2 { font-size: 13px; margin: 0 0 12px; color: #e6edf3; text-transform: uppercase; letter-spacing: 1px; }
-  h3 { margin: 18px 0 8px; font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .sec { padding: 18px 0; }
-  .sec:first-child { padding-top: 0; }
-  .sec:last-child { padding-bottom: 0; }
-  .sec + .sec { border-top: 1px solid #30363d; }
-  label { display: flex; flex-direction: column; gap: 4px; color: #8b949e; font-size: 12px; }
-  label.chk { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 8px; }
-  label.chk input { accent-color: #d29922; width: 16px; height: 16px; }
-  input, select {
-    background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
-    padding: 8px 10px; font: inherit;
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; cursor: pointer; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #2b3139; border-radius: 4px; }
+
+  /* Header */
+  .header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
   }
-  button {
-    background: #238636; color: #fff; border: 1px solid #2ea043; border-radius: 6px;
-    padding: 9px 14px; font: inherit; cursor: pointer;
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+  .brand .logo {
+    width: 26px; height: 26px; display: grid; place-items: center;
+    color: var(--yellow);
   }
-  button.ghost { background: #21262d; border-color: #30363d; }
-  button.sm { padding: 4px 10px; font-size: 12px; }
-  button.danger { background: #3d1418; border-color: #f85149; color: #f85149; }
-  button.warnbtn { background: #3a2d0a; border-color: #d29922; color: #d29922; }
-  button:hover { filter: brightness(1.15); }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; white-space: nowrap; }
-  th { color: #8b949e; font-weight: 400; }
-  pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 10px; overflow: auto; white-space: pre-wrap; }
-  .msg { color: #8b949e; font-size: 12px; }
-  .ok { color: #3fb950; } .err { color: #f85149; } .warn { color: #d29922; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #f85149; }
-  .dot.on { background: #3fb950; }
-  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #21262d; border: 1px solid #30363d; }
-  .badge.long { background: #12351f; border-color: #2ea043; color: #3fb950; }
-  .badge.short { background: #3d1418; border-color: #f85149; color: #f85149; }
-  .badge.flat { color: #8b949e; }
-  .rec { font-size: 20px; font-weight: 700; padding: 6px 16px; border-radius: 8px; letter-spacing: 1px; }
-  .rec.BUY, .rec.LONG { background: #12351f; color: #3fb950; border: 1px solid #2ea043; }
-  .rec.SELL, .rec.SHORT { background: #3d1418; color: #f85149; border: 1px solid #f85149; }
-  .rec.HOLD { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
-  .trend-Bullish { color: #3fb950; }
-  .trend-Bearish { color: #f85149; }
-  .trend-Netral { color: #8b949e; }
-  .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #21262d; }
-  .stat span:first-child { color: #8b949e; }
-  .legend { display: flex; gap: 14px; font-size: 12px; color: #8b949e; margin: 6px 0; }
-  .legend i { width: 10px; height: 10px; display: inline-block; margin-right: 4px; }
-  #chart { width: 100%; height: 380px; }
-  .actions { display: flex; gap: 6px; }
+  .brand small { color: var(--muted); font-weight: 400; font-size: 11px; }
+  .header .spacer { flex: 1; }
+  .status {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: 12px;
+  }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+  .status.on .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status.on { color: var(--green); }
+  .seg { display: flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; border: 0; color: var(--muted); padding: 6px 14px; font-size: 12px; }
+  .seg button.active { background: var(--yellow); color: #14151a; font-weight: 600; }
+  .icon-btn {
+    width: 34px; height: 34px; display: grid; place-items: center;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--muted);
+  }
+  .icon-btn:hover { color: var(--text); }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    background: linear-gradient(135deg, #f0b90b, #8a6a06); color: #14151a; font-weight: 700;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    grid-area: sidebar;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar .sb-head { padding: 16px 16px 10px; display: flex; align-items: center; gap: 8px; }
+  .sidebar .sb-head h2 { font-size: 13px; margin: 0; flex: 1; }
+  .sidebar .sb-head .count { color: var(--muted); font-size: 11px; }
+  .search { padding: 0 12px 10px; position: relative; }
+  .search svg { position: absolute; left: 22px; top: 9px; color: var(--muted); }
+  .search input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px 8px 32px; color: var(--text); font-size: 12px;
+  }
+  .fav-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .fav {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 8px;
+    padding: 10px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+  }
+  .fav:hover { background: var(--panel-2); }
+  .fav.active { background: var(--panel-2); border-color: var(--yellow); }
+  .fav .sym { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .fav .sym .base { color: var(--text); }
+  .fav .sym .quote { color: var(--muted); font-weight: 400; }
+  .fav .star { border: 0; background: transparent; color: var(--yellow); padding: 0; line-height: 1; }
+  .fav .price { color: var(--text); font-variant-numeric: tabular-nums; }
+  .fav .chg { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .fav .chg.up { color: var(--green); }
+  .fav .chg.down { color: var(--red); }
+  .fav-list .empty { color: var(--muted); padding: 16px; text-align: center; font-size: 12px; }
+  .sidebar .sb-foot { padding: 12px; border-top: 1px solid var(--border); }
+  .btn {
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    border-radius: 8px; padding: 9px 14px; font-size: 12px;
+  }
+  .btn:hover { border-color: #3a424b; }
+  .btn.primary { background: var(--yellow); color: #14151a; border-color: var(--yellow); font-weight: 700; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .btn.green { background: var(--green); color: #05231a; border-color: var(--green); font-weight: 700; }
+  .btn.red { background: transparent; color: var(--red); border-color: rgba(246,70,93,.5); }
+  .btn.block { width: 100%; }
+  .btn.sm { padding: 5px 10px; font-size: 11px; }
+
+  /* Main */
+  .main { grid-area: main; overflow-y: auto; padding: 18px 20px 40px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+
+  /* Balance summary */
+  .balance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-bottom: 16px; overflow: hidden; }
+  .balance .cell { background: var(--panel); padding: 14px 18px; }
+  .balance .cell .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .balance .cell .v { font-size: 20px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .balance .cell .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .up { color: var(--green); } .down { color: var(--red); } .muted { color: var(--muted); }
+
+  /* Workspace */
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+
+  .chart-card { padding: 0; overflow: hidden; }
+  .pair-head { display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .pair-head .pc-name { display: flex; align-items: center; gap: 10px; }
+  .coin-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); font-weight: 700; color: var(--yellow); }
+  .pair-head .title { font-size: 15px; font-weight: 700; }
+  .pair-head .sub { color: var(--muted); font-size: 11px; }
+  .pair-head .price { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pair-head .chg { font-size: 12px; }
+  .pair-metrics { display: flex; gap: 18px; margin-left: auto; }
+  .pair-metrics .m .k { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+  .pair-metrics .m .v { font-variant-numeric: tabular-nums; }
+  .tf-row { display: flex; align-items: center; gap: 6px; padding: 10px 16px 6px; }
+  .tf { border: 1px solid transparent; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 6px; font-size: 12px; }
+  .tf:hover { color: var(--text); }
+  .tf.active { color: var(--yellow); border-color: var(--yellow); }
+  #chart { width: 100%; height: 460px; }
+
+  /* Right column */
+  .side-col { display: flex; flex-direction: column; gap: 16px; }
+  .panel { padding: 16px; }
+  .panel h3 { margin: 0 0 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .rec-signal { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .signal-badge { font-size: 22px; font-weight: 800; letter-spacing: 1px; padding: 6px 18px; border-radius: 8px; }
+  .signal-badge.BUY { background: rgba(14,203,129,.12); color: var(--green); }
+  .signal-badge.SELL { background: rgba(246,70,93,.12); color: var(--red); }
+  .signal-badge.HOLD { background: var(--panel-2); color: var(--muted); }
+  .conf { flex: 1; }
+  .conf .k { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
+  .conf .bar { height: 6px; background: var(--panel-2); border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  .conf .bar > i { display: block; height: 100%; background: var(--yellow); }
+  .kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .kv:last-of-type { border-bottom: 0; }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-variant-numeric: tabular-nums; }
+  .panel .btn.block { margin-top: 14px; }
+  .analysis .kv .v.badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--panel-2); }
+  .badge-bull { color: var(--green); } .badge-bear { color: var(--red); } .badge-side { color: var(--muted); }
+  .ai-box { margin-top: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: #c8cdd3; line-height: 1.55; font-size: 12px; }
+
+  /* Positions */
+  .positions { margin-top: 16px; }
+  .positions .p-head { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .positions .p-head h3 { margin: 0; flex: 1; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .empty-state { padding: 28px; text-align: center; color: var(--muted); }
+  .empty-state .big { font-size: 15px; color: var(--text); margin-bottom: 4px; }
+  .side-tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .side-tag.long { background: rgba(14,203,129,.12); color: var(--green); }
+  .side-tag.short { background: rgba(246,70,93,.12); color: var(--red); }
+
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; }
+  .overlay.hidden { display: none; }
+  .modal { width: 420px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .modal .m-head { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .modal .m-head h3 { margin: 0; flex: 1; font-size: 14px; }
+  .modal .m-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .modal .m-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { color: var(--muted); font-size: 11px; }
+  .field input, .field select {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 10px; color: var(--text); font-size: 13px;
+  }
+  .close-x { border: 0; background: transparent; color: var(--muted); font-size: 18px; line-height: 1; }
+
+  /* Toast */
+  #toasts { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 80; }
+  .toast { background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 8px; padding: 10px 14px; font-size: 12px; max-width: 340px; }
+  .toast.ok { border-left-color: var(--green); } .toast.err { border-left-color: var(--red); }
+
+  @media (max-width: 1150px) {
+    body { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+    .sidebar { display: none; }
+    .workspace { grid-template-columns: 1fr; }
+    .balance { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
-  <h1>simple-trade-bot</h1>
-
-  <section class="card">
-    <div class="row">
-      <label style="flex:1">Webhook secret
-        <input id="secret" type="password" placeholder="WEBHOOK_SECRET">
-      </label>
-      <button id="save">Simpan</button>
-      <span id="authmsg" class="msg"></span>
+  <header class="header">
+    <div class="brand">
+      <span class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l3 3-3 3-3-3 3-3zm-6 6l3 3-3 3-3-3 3-3zm12 0l3 3-3 3-3-3 3-3zM7.5 15l4.5 4.5L16.5 15 12 19.5 7.5 15zM12 9.5l2.5 2.5L12 14.5 9.5 12 12 9.5z"/></svg>
+      </span>
+      <div>Binance Bot <br><small>Trading Terminal</small></div>
     </div>
-  </section>
-
-  <section class="card">
-    <div class="sec">
-      <h2>1. Saldo</h2>
-      <div class="row">
-        <label>Profile <select id="balProfile"></select></label>
-        <label>Market <select id="balMarket"><option>spot</option><option>future</option></select></label>
-        <label>Interval stream (s) <select id="balInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
-        <button id="loadBal" class="ghost">Refresh</button>
-        <span id="balDot" class="dot" title="stream balance"></span>
-      </div>
-      <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
-      <div id="balMsg" class="msg"></div>
+    <div class="spacer"></div>
+    <div id="botStatus" class="status"><span class="dot"></span><span id="botStatusText">Stopped</span></div>
+    <div class="seg" id="marketSeg">
+      <button data-market="spot">Spot</button>
+      <button data-market="future" class="active">Futures</button>
     </div>
+    <button class="icon-btn" id="settingsBtn" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 13.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+    <div id="avatar" class="avatar" title="Profile">B</div>
+  </header>
 
-    <div class="sec">
-      <h2>2. Rekomendasi Aksi Berdasarkan Trend</h2>
-      <div class="row">
-        <label>Profile <select id="tProfile"></select></label>
-        <label>Market <select id="tMarket"><option>future</option><option>spot</option></select></label>
-        <label>Ticker <input id="tTicker" list="tickers" placeholder="BTCUSDT"></label>
-        <label>MA fast <input id="tFast" type="number" value="7"></label>
-        <label>MA slow <input id="tSlow" type="number" value="25"></label>
-        <label>MA trend <input id="tTrend" type="number" value="99"></label>
-        <button id="loadTrends">Analisa tren</button>
-        <span id="trendMsg" class="msg"></span>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <label style="flex:0 0 280px">Tambah pair baru <input id="newTicker" placeholder="mis. ADAUSDT atau ADA/USDT"></label>
-        <button id="addTicker" class="ghost">Tambah pair</button>
-        <span id="pairMsg" class="msg"></span>
-      </div>
-      <div class="row" style="gap:16px; align-items:center; margin:10px 0 8px">
-        <span id="tRec" class="rec HOLD">-</span>
-        <span id="tOverall" class="msg"></span>
-      </div>
-      <table id="trendTable">
-        <thead><tr><th>Timeframe</th><th>Tren</th><th>Harga</th><th>MA fast</th><th>MA slow</th><th>MA trend</th><th>Sinyal</th><th>Rekomendasi</th></tr></thead>
-        <tbody></tbody>
-      </table>
+  <aside class="sidebar">
+    <div class="sb-head"><h2>Favorites</h2><span id="favCount" class="count">0</span></div>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="favSearch" placeholder="Cari pair...">
     </div>
+    <div id="favList" class="fav-list"><div class="empty">Memuat favorites...</div></div>
+    <div class="sb-foot"><button id="addFavBtn" class="btn block">+ Add Favorite</button></div>
+  </aside>
 
-    <div class="sec">
-      <h2>3. Chart</h2>
-      <div class="row">
-        <label>Profile <select id="cProfile"></select></label>
-        <label>Ticker <input id="cTicker" list="tickers" placeholder="BTCUSDT"></label>
-        <label>Market <select id="cMarket"><option>future</option><option>spot</option></select></label>
-        <label>Timeframe <select id="cTimeframe"></select></label>
-        <label>MA fast <input id="cFast" type="number" value="7"></label>
-        <label>MA slow <input id="cSlow" type="number" value="25"></label>
-        <label>MA trend <input id="cTrend" type="number" value="99"></label>
-        <label class="chk" title="Long saat pullback ke MA slow lalu reclaim (selama di atas MA trend)"><input id="cDip" type="checkbox"> dip_catcher</label>
-        <label>Dip lookback <input id="cDipLookback" type="number" min="1" value="3"></label>
-        <button id="loadChart">Muat chart</button>
-        <span id="chartMsg" class="msg"></span>
-      </div>
-      <div class="legend">
-        <span><i style="background:#f5d90a"></i>MA fast</span>
-        <span><i style="background:#58a6ff"></i>MA slow</span>
-        <span><i style="background:#bc8cff"></i>MA trend</span>
-        <span><i style="background:#3fb950"></i>signal L</span>
-        <span><i style="background:#f85149"></i>signal S</span>
-        <span><i style="background:#d29922"></i>dip</span>
-      </div>
-      <div id="chart"></div>
-    </div>
+  <main class="main">
+    <section class="balance card">
+      <div class="cell"><div class="k">Total Balance</div><div class="v" id="balTotal">-</div><div class="s" id="balTotalSub">USDT</div></div>
+      <div class="cell"><div class="k">Available Balance</div><div class="v" id="balFree">-</div><div class="s">USDT</div></div>
+      <div class="cell"><div class="k">Today's PnL</div><div class="v" id="balPnl">-</div><div class="s" id="balPnlPct">-</div></div>
+    </section>
 
-    <div class="sec">
-      <h2>4. Analisa Pergerakan</h2>
-      <div class="row" style="margin-bottom:8px">
-        <span id="aSignal" class="badge flat">-</span>
-        <span id="aReason" class="msg"></span>
-      </div>
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-        <div>
-          <div class="stat"><span>Symbol</span><span id="aSymbol">-</span></div>
-          <div class="stat"><span>Harga (close)</span><span id="aPrice">-</span></div>
-          <div class="stat"><span>Candle close</span><span id="aTime">-</span></div>
-          <div class="stat"><span>Cross terakhir</span><span id="aCross">-</span></div>
+    <section class="workspace">
+      <div class="card chart-card">
+        <div class="pair-head">
+          <div class="pc-name">
+            <div class="coin-badge" id="coinBadge">-</div>
+            <div>
+              <div class="title" id="pairTitle">-</div>
+              <div class="sub" id="pairSub">-</div>
+            </div>
+          </div>
+          <div>
+            <div class="price" id="pairPrice">-</div>
+            <div class="chg muted" id="pairChange">-</div>
+          </div>
+          <div class="pair-metrics">
+            <div class="m"><div class="k">24H High</div><div class="v" id="pairHigh">-</div></div>
+            <div class="m"><div class="k">24H Low</div><div class="v" id="pairLow">-</div></div>
+            <div class="m"><div class="k">24H Volume</div><div class="v" id="pairVol">-</div></div>
+          </div>
+          <button class="icon-btn" id="pairStar" title="Favorite">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9L12 3z"/></svg>
+          </button>
         </div>
-        <div>
-          <div class="stat"><span id="aFastLabel">MA fast</span><span id="aFast">-</span></div>
-          <div class="stat"><span id="aSlowLabel">MA slow</span><span id="aSlow">-</span></div>
-          <div class="stat"><span id="aTrendLabel">MA trend</span><span id="aTrend">-</span></div>
-          <div class="stat"><span>Posisi saat ini</span><span id="aPos">-</span></div>
+        <div class="tf-row" id="tfRow">
+          <button class="tf" data-tf="5m">5m</button>
+          <button class="tf active" data-tf="15m">15m</button>
+          <button class="tf" data-tf="1h">1H</button>
+          <button class="tf" data-tf="4h">4H</button>
+          <button class="tf" data-tf="1d">1D</button>
+          <span class="spacer" style="flex:1"></span>
+          <span id="chartMsg" class="muted" style="font-size:11px"></span>
+        </div>
+        <div id="chart"></div>
+      </div>
+
+      <div class="side-col">
+        <div class="card panel rec">
+          <h3>Bot Recommendation</h3>
+          <div class="rec-signal">
+            <span class="signal-badge HOLD" id="recSignal">HOLD</span>
+            <div class="conf">
+              <div class="k"><span>Confidence</span><span id="recConfText">-</span></div>
+              <div class="bar"><i id="recConfBar" style="width:0%"></i></div>
+            </div>
+          </div>
+          <div class="kv"><span class="k">Entry Range</span><span class="v" id="recEntry">-</span></div>
+          <div class="kv"><span class="k">Take Profit</span><span class="v up" id="recTp">-</span></div>
+          <div class="kv"><span class="k">Stop Loss</span><span class="v down" id="recSl">-</span></div>
+          <div class="kv"><span class="k">Risk / Reward</span><span class="v" id="recRr">-</span></div>
+          <button class="btn primary block" id="tradeBtn">Trade with Bot</button>
+        </div>
+
+        <div class="card panel analysis">
+          <h3>Market Analysis</h3>
+          <div class="kv"><span class="k">Trend</span><span class="v badge" id="anTrend">-</span></div>
+          <div class="kv"><span class="k">Volume</span><span class="v" id="anVolume">-</span></div>
+          <div class="kv"><span class="k">Momentum</span><span class="v" id="anMomentum">-</span></div>
+          <div class="kv"><span class="k">RSI (14)</span><span class="v" id="anRsi">-</span></div>
+          <div class="ai-box" id="anSummary">Belum ada analisa. Pilih pair dan muat data.</div>
+          <button class="btn block" id="detailBtn">View Detail Analysis</button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="sec">
-      <h2>5. Open Positions</h2>
-      <div class="row">
-        <label>Profile <select id="posProfile"></select></label>
-        <label>Interval stream (s) <select id="posInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
-        <button id="loadPos" class="ghost">Refresh</button>
-        <span id="posDot" class="dot" title="stream posisi"></span>
+    <section class="card positions">
+      <div class="p-head"><h3>Open Positions</h3><span id="posMsg" class="muted" style="font-size:11px"></span></div>
+      <div id="posBody">
+        <table>
+          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>PnL</th><th>Action</th></tr></thead>
+          <tbody id="posRows"></tbody>
+        </table>
+        <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
       </div>
-      <table id="posTable">
-        <thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th><th>Aksi</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div id="posMsg" class="msg"></div>
-    </div>
+    </section>
+  </main>
 
-    <div class="sec">
-      <h2>6. Order Manual</h2>
-      <div class="grid">
-        <label>Market <select id="oMarket"><option>spot</option><option selected>future</option></select></label>
-        <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
-        <label>Action <select id="oAction"><option>long</option><option>short</option><option>close</option><option>stop</option></select></label>
-        <label>Amount <input id="oAmount" type="number" step="any" placeholder="50"></label>
-        <label>Amount type <select id="oAmountType"><option>quote</option><option>base</option></select></label>
-        <label>Price (opsional) <input id="oPrice" type="number" step="any" placeholder="market"></label>
-        <label>Stop price (untuk action stop) <input id="oStopPrice" type="number" step="any" placeholder="mis. 60000"></label>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button id="send">Kirim order</button>
-        <span id="ordermsg" class="msg"></span>
-      </div>
-      <pre id="result">-</pre>
-    </div>
-  </section>
+  <div id="modalRoot" class="overlay hidden"><div class="modal" id="modalBox"></div></div>
+  <div id="toasts"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const secretInput = $('secret');
-secretInput.value = localStorage.getItem('stb_secret') || '';
+const state = {
+  secret: localStorage.getItem('stb_secret') || '',
+  profile: null,
+  market: 'future',
+  ticker: null,
+  timeframe: '15m',
+  meta: {},
+  favorites: [],
+  custom: new Set(),
+  chart: null,
+  series: {},
+  poll: null,
+  lastRec: null
+};
 
-let meta = {};
-let balanceStream = null;
-let positionStream = null;
-let chart = null;
-let candleSeries = null;
-let maSeries = { fast: null, slow: null, trend: null };
+const COIN_NAMES = {
+  BTC: 'Bitcoin', ETH: 'Ethereum', BNB: 'BNB', SOL: 'Solana', XRP: 'XRP',
+  ADA: 'Cardano', DOGE: 'Dogecoin', ENA: 'Ethena', AVAX: 'Avalanche',
+  LINK: 'Chainlink', DOT: 'Polkadot', MATIC: 'Polygon', LTC: 'Litecoin',
+  TRX: 'TRON', TON: 'Toncoin', SUI: 'Sui', NEAR: 'NEAR', APT: 'Aptos'
+};
 
-function authHeaders(extra) {
-  return Object.assign({ 'x-webhook-secret': secretInput.value }, extra || {});
+function fmt(n, d = 2) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '-';
+  return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function fmtPrice(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '-';
+  if (v >= 1000) return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (v >= 1) return v.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  return v.toLocaleString('en-US', { maximumFractionDigits: 8 });
+}
+function fmtVol(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '-';
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(2) + 'K';
+  return v.toFixed(2);
+}
+function baseOf(sym) { return String(sym || '').split(/[/:]/)[0]; }
+function quoteOf(sym) { const p = String(sym || '').split(/[/:]/); return p[1] || 'USDT'; }
+function pairLabel(t) { const b = baseOf(t); const q = quoteOf(t); return b + '/' + (q.split(':')[0] || q); }
+function toast(text, cls = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + cls;
+  el.textContent = text;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4200);
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, Object.assign({}, options, { headers: authHeaders(options.headers) }));
+  const headers = Object.assign({ 'x-webhook-secret': state.secret }, options.headers || {});
+  const res = await fetch(path, Object.assign({}, options, { headers }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
+function q(obj) { return new URLSearchParams(obj).toString(); }
 
-function setMsg(el, text, cls = 'msg') {
-  el.textContent = text;
-  el.className = cls;
-}
-
-function fill(select, values, selected) {
-  select.innerHTML = values.map(v => `<option>${v}</option>`).join('');
-  if (selected) select.value = selected;
-}
-
-function num(v, digits = 4) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: digits }) : (v ?? '-');
-}
-
-function pnlClass(v) {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n === 0) return '';
-  return n > 0 ? 'ok' : 'err';
-}
-
-$('save').onclick = () => {
-  localStorage.setItem('stb_secret', secretInput.value);
-  setMsg($('authmsg'), 'secret disimpan', 'msg ok');
-  bootstrap();
-};
-
-function updateTickers(data) {
-  $('tickers').innerHTML = data.tickers.map(t => `<option value="${t}">`).join('');
-}
-
-async function loadMeta() {
-  meta = await api('/api/meta');
-  const profiles = meta.profiles.length ? meta.profiles : [meta.defaultProfile];
-  fill($('balProfile'), profiles, meta.defaultProfile);
-  fill($('posProfile'), profiles, meta.defaultProfile);
-  fill($('cProfile'), profiles, meta.defaultProfile);
-  fill($('tProfile'), profiles, meta.defaultProfile);
-  updateTickers(meta);
-  if (meta.tickers[0]) {
-    $('cTicker').value = meta.tickers[0];
-    $('tTicker').value = meta.tickers[0];
+/* ---------- Indicators ---------- */
+function ema(values, period) {
+  const k = 2 / (period + 1);
+  const out = new Array(values.length).fill(null);
+  let prev = null;
+  for (let i = 0; i < values.length; i++) {
+    prev = prev == null ? values[i] : values[i] * k + prev * (1 - k);
+    out[i] = prev;
   }
-  fill($('cTimeframe'), meta.timeframes, '15m');
-  if (meta.maDefaults) {
-    $('cFast').value = meta.maDefaults.fast;
-    $('cSlow').value = meta.maDefaults.slow;
-    $('cTrend').value = meta.maDefaults.trend;
-    $('tFast').value = meta.maDefaults.fast;
-    $('tSlow').value = meta.maDefaults.slow;
-    $('tTrend').value = meta.maDefaults.trend;
+  return out;
+}
+function rsi(closes, period = 14) {
+  if (closes.length < period + 1) return null;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gain += d; else loss -= d;
   }
-  setMsg($('authmsg'), 'secret valid', 'msg ok');
+  let ag = gain / period, al = loss / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    ag = (ag * (period - 1) + (d > 0 ? d : 0)) / period;
+    al = (al * (period - 1) + (d < 0 ? -d : 0)) / period;
+  }
+  if (al === 0) return 100;
+  const rs = ag / al;
+  return 100 - 100 / (1 + rs);
+}
+function atr(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  let sum = 0;
+  for (let i = candles.length - period; i < candles.length; i++) {
+    const prev = candles[i - 1];
+    const tr = Math.max(candles[i].high - candles[i].low, Math.abs(candles[i].high - prev.close), Math.abs(candles[i].low - prev.close));
+    sum += tr;
+  }
+  return sum / period;
 }
 
-function renderBalance(rows) {
-  $('balTable').querySelector('tbody').innerHTML =
-    rows.map(r => `<tr><td>${r.currency}</td><td>${num(r.total, 8)}</td><td>${num(r.free, 8)}</td><td>${num(r.used, 8)}</td></tr>`).join('')
-    || '<tr><td colspan="4">kosong</td></tr>';
+/* ---------- Favorites ---------- */
+async function loadFavorites() {
+  const pairs = await api('/api/tickers').catch(() => ({ pairs: [] }));
+  state.custom = new Set(pairs.pairs.map(p => p.ticker));
+  const all = [...new Set([...(state.meta.tickers || []), ...pairs.pairs.map(p => p.ticker)])];
+  state.favorites = all.map(t => ({ ticker: t, price: null, pct: null }));
+  $('favCount').textContent = all.length;
+  renderFavorites();
+  refreshFavoritePrices();
 }
 
-function renderPositions(rows) {
-  const tbody = $('posTable').querySelector('tbody');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8">kosong</td></tr>';
-    return;
-  }
-  tbody.innerHTML = rows.map(r => {
-    const sym = r.symbol || '';
-    return `<tr>
-      <td>${sym}</td>
-      <td><span class="badge ${r.side === 'long' ? 'long' : 'short'}">${r.side}</span></td>
-      <td>${num(r.contracts)}</td>
-      <td>${num(r.entryPrice, 8)}</td>
-      <td>${num(r.markPrice, 8)}</td>
-      <td class="${pnlClass(r.unrealizedPnl)}">${num(r.unrealizedPnl, 4)}</td>
-      <td>${r.leverage ?? '-'}</td>
-      <td class="actions">
-        <button class="sm danger" data-action="close" data-symbol="${sym}">Close</button>
-        <button class="sm warnbtn" data-action="stop" data-symbol="${sym}">Stop</button>
-      </td>
-    </tr>`;
+function renderFavorites() {
+  const filter = ($('favSearch').value || '').toUpperCase();
+  const list = state.favorites.filter(f => f.ticker.includes(filter));
+  if (!list.length) { $('favList').innerHTML = '<div class="empty">Tidak ada pair.</div>'; return; }
+  $('favList').innerHTML = list.map(f => {
+    const pctCls = f.pct == null ? '' : f.pct >= 0 ? 'up' : 'down';
+    const pctTxt = f.pct == null ? '—' : (f.pct >= 0 ? '+' : '') + f.pct.toFixed(2) + '%';
+    return `<div class="fav ${f.ticker === state.ticker ? 'active' : ''}" data-ticker="${f.ticker}">
+      <div class="sym"><span class="base">${baseOf(f.ticker)}</span><span class="quote">/${quoteOf(f.ticker).split(':')[0]}</span></div>
+      <button class="star" data-remove="${f.ticker}" title="Hapus dari favorites">★</button>
+      <div class="price">${f.price == null ? '—' : fmtPrice(f.price)}</div>
+      <div class="chg ${pctCls}">${pctTxt}</div>
+    </div>`;
   }).join('');
 }
 
-function connectBalanceStream() {
-  if (balanceStream) { balanceStream.close(); balanceStream = null; }
-  const profile = $('balProfile').value;
-  if (!profile || !secretInput.value) { $('balDot').classList.remove('on'); return; }
-
-  const qs = new URLSearchParams({
-    secret: secretInput.value,
-    scope: 'balance',
-    profile,
-    market: $('balMarket').value,
-    interval: $('balInterval').value
-  });
-  balanceStream = new EventSource('/api/stream?' + qs.toString());
-
-  balanceStream.addEventListener('balance', e => {
-    $('balDot').classList.add('on');
-    setMsg($('balMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
-    renderBalance(JSON.parse(e.data).balances);
-  });
-  balanceStream.addEventListener('streamerror', e => {
-    const d = JSON.parse(e.data);
-    setMsg($('balMsg'), d.error, 'msg err');
-  });
-  balanceStream.onerror = () => {
-    $('balDot').classList.remove('on');
-    setMsg($('balMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
-  };
+async function refreshFavoritePrices() {
+  await Promise.all(state.favorites.map(async f => {
+    try {
+      const d = await api('/api/ticker?' + q({ profile: state.profile, market: state.market, symbol: f.ticker }));
+      f.price = d.ticker.last;
+      f.pct = d.ticker.percentage;
+    } catch { /* biarkan kosong */ }
+  }));
+  renderFavorites();
 }
 
-function connectPositionStream() {
-  if (positionStream) { positionStream.close(); positionStream = null; }
-  const profile = $('posProfile').value;
-  if (!profile || !secretInput.value) { $('posDot').classList.remove('on'); return; }
-
-  const qs = new URLSearchParams({
-    secret: secretInput.value,
-    scope: 'positions',
-    profile,
-    interval: $('posInterval').value
-  });
-  positionStream = new EventSource('/api/stream?' + qs.toString());
-
-  positionStream.addEventListener('positions', e => {
-    $('posDot').classList.add('on');
-    setMsg($('posMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
-    renderPositions(JSON.parse(e.data).positions);
-  });
-  positionStream.addEventListener('streamerror', e => {
-    const d = JSON.parse(e.data);
-    setMsg($('posMsg'), d.error, 'msg err');
-  });
-  positionStream.onerror = () => {
-    $('posDot').classList.remove('on');
-    setMsg($('posMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
-  };
-}
-
-$('loadBal').onclick = connectBalanceStream;
-$('balProfile').onchange = connectBalanceStream;
-$('balMarket').onchange = connectBalanceStream;
-$('balInterval').onchange = connectBalanceStream;
-
-$('loadPos').onclick = connectPositionStream;
-$('posProfile').onchange = connectPositionStream;
-$('posInterval').onchange = connectPositionStream;
-
-async function placeOrder(body) {
-  return api('/api/order', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-}
-
-$('posTable').addEventListener('click', async event => {
-  const button = event.target.closest('button[data-action]');
-  if (!button) return;
-  const action = button.dataset.action;
-  const symbol = button.dataset.symbol;
-  const profile = $('posProfile').value;
-
-  const buttons = $('posTable').querySelectorAll('button');
-  buttons.forEach(b => { b.disabled = true; });
-
-  try {
-    if (action === 'close') {
-      if (!confirm(`Tutup posisi ${symbol}?`)) return;
-      const data = await placeOrder({ profile, market: 'future', ticker: symbol, action: 'close' });
-      setMsg($('posMsg'), `close ${symbol} terkirim`, 'msg ok');
-      $('result').textContent = JSON.stringify(data, null, 2);
-    } else if (action === 'stop') {
-      const input = prompt(`Harga stop untuk ${symbol}:`);
-      if (!input) return;
-      const data = await placeOrder({ profile, market: 'future', ticker: symbol, action: 'stop', stopPrice: Number(input) });
-      setMsg($('posMsg'), `stop ${symbol} @ ${input} terkirim`, 'msg ok');
-      $('result').textContent = JSON.stringify(data, null, 2);
-    }
-  } catch (e) {
-    setMsg($('posMsg'), e.message, 'msg err');
-    $('result').textContent = e.message;
-  } finally {
-    buttons.forEach(b => { b.disabled = false; });
+$('favSearch').addEventListener('input', renderFavorites);
+$('favList').addEventListener('click', async e => {
+  const star = e.target.closest('[data-remove]');
+  if (star) {
+    e.stopPropagation();
+    const ticker = star.dataset.remove;
+    if (!state.custom.has(ticker)) { toast('Pair default dari config tidak bisa dihapus di sini.', 'err'); return; }
+    try {
+      await api('/api/tickers?ticker=' + encodeURIComponent(ticker), { method: 'DELETE' });
+      toast('Favorite dihapus: ' + ticker, 'ok');
+      await loadFavorites();
+    } catch (err) { toast(err.message, 'err'); }
+    return;
   }
+  const item = e.target.closest('.fav');
+  if (item) selectPair(item.dataset.ticker);
 });
 
+/* ---------- Selection & loading ---------- */
+async function selectPair(ticker) {
+  if (!ticker) return;
+  state.ticker = ticker;
+  renderFavorites();
+  updatePairHeader({ symbol: ticker, ticker: {} });
+  $('pairStar').style.color = state.custom.has(ticker) || state.favorites.some(f => f.ticker === ticker) ? 'var(--yellow)' : 'var(--muted)';
+  await loadPair();
+}
+
+function updatePairHeader(data) {
+  const t = data.ticker || {};
+  const b = baseOf(data.symbol || state.ticker || '');
+  const quote = quoteOf(data.symbol || state.ticker || '').split(':')[0];
+  $('coinBadge').textContent = b.slice(0, 3);
+  $('pairTitle').textContent = b + '/' + quote;
+  $('pairSub').textContent = (COIN_NAMES[b] || b) + ' · ' + (state.market === 'future' ? 'Futures' : 'Spot');
+  $('pairPrice').textContent = t.last != null ? fmtPrice(t.last) : '-';
+  const pct = t.percentage;
+  const chg = $('pairChange');
+  if (pct == null) { chg.textContent = '-'; chg.className = 'chg muted'; }
+  else {
+    chg.textContent = (pct >= 0 ? '+' : '') + fmt(pct, 2) + '%' + (t.change != null ? '  (' + (t.change >= 0 ? '+' : '') + fmtPrice(t.change) + ')' : '');
+    chg.className = 'chg ' + (pct >= 0 ? 'up' : 'down');
+  }
+  $('pairHigh').textContent = t.high != null ? fmtPrice(t.high) : '-';
+  $('pairLow').textContent = t.low != null ? fmtPrice(t.low) : '-';
+  $('pairVol').textContent = t.quoteVolume != null ? fmtVol(t.quoteVolume) : (t.volume != null ? fmtVol(t.volume) : '-');
+}
+
+async function loadPair() {
+  if (!state.ticker || !state.secret) return;
+  const base = { profile: state.profile, market: state.market, symbol: state.ticker };
+  $('chartMsg').textContent = 'memuat...';
+  const [tick, chartData, trends] = await Promise.all([
+    api('/api/ticker?' + q(base)).catch(() => null),
+    api('/api/candles?' + q({ ...base, timeframe: state.timeframe, limit: 300 })).catch(e => ({ error: e.message })),
+    api('/api/trends?' + q(base)).catch(() => null)
+  ]);
+  if (tick) updatePairHeader(tick);
+  else updatePairHeader({ symbol: state.ticker, ticker: {} });
+
+  if (chartData && chartData.candles) {
+    renderChart(chartData);
+    const ind = computeIndicators(chartData.candles);
+    renderRecommendation(ind, chartData.analysis, trends);
+    renderAnalysis(ind, chartData.analysis, trends);
+    $('chartMsg').textContent = chartData.symbol + ' · ' + chartData.timeframe;
+  } else {
+    $('chartMsg').textContent = (chartData && chartData.error) ? 'data tidak tersedia' : '';
+    renderRecommendation(null, null, null);
+    renderAnalysis(null, null, null);
+  }
+  loadPositions();
+}
+
+function computeIndicators(candles) {
+  const closes = candles.map(c => c.close);
+  const e20 = ema(closes, 20);
+  const e50 = ema(closes, 50);
+  const r = rsi(closes, 14);
+  const a = atr(candles, 14);
+  const vol = candles.map(c => c.volume || 0);
+  const recentVol = vol.slice(-20).reduce((s, v) => s + v, 0) / Math.max(1, Math.min(20, vol.length));
+  const prevSlice = vol.slice(-40, -20);
+  const prevVol = prevSlice.reduce((s, v) => s + v, 0) / Math.max(1, prevSlice.length);
+  const volTrend = prevVol ? (recentVol - prevVol) / prevVol : 0;
+  const last = closes[closes.length - 1];
+  const e20Last = e20[e20.length - 1];
+  const e20Prev = e20[Math.max(0, e20.length - 6)];
+  const momentum = e20Last != null && e20Prev != null ? (e20Last - e20Prev) / e20Prev : 0;
+  return { closes, ema20: e20, ema50: e50, rsi: r, atr: a, volTrend, last, momentum };
+}
+
+/* ---------- Chart ---------- */
 function ensureChart() {
-  if (chart) return;
-  chart = LightweightCharts.createChart($('chart'), {
-    layout: { background: { color: '#161b22' }, textColor: '#8b949e' },
-    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-    rightPriceScale: { borderColor: '#30363d' },
-    timeScale: { borderColor: '#30363d', timeVisible: true },
+  if (state.chart) return;
+  const el = $('chart');
+  state.chart = LightweightCharts.createChart(el, {
+    layout: { background: { color: '#161a1e' }, textColor: '#848e9c' },
+    grid: { vertLines: { color: '#1e2329' }, horzLines: { color: '#1e2329' } },
+    rightPriceScale: { borderColor: '#2b3139' },
+    timeScale: { borderColor: '#2b3139', timeVisible: true },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
   });
-  candleSeries = chart.addCandlestickSeries({
-    upColor: '#3fb950', downColor: '#f85149', borderVisible: false,
-    wickUpColor: '#3fb950', wickDownColor: '#f85149'
-  });
-  maSeries.fast = chart.addLineSeries({ color: '#f5d90a', lineWidth: 1 });
-  maSeries.slow = chart.addLineSeries({ color: '#58a6ff', lineWidth: 1 });
-  maSeries.trend = chart.addLineSeries({ color: '#bc8cff', lineWidth: 1 });
-  new ResizeObserver(() => chart.applyOptions({ width: $('chart').clientWidth })).observe($('chart'));
+  state.series.candle = state.chart.addCandlestickSeries({ upColor: '#0ecb81', downColor: '#f6465d', borderVisible: false, wickUpColor: '#0ecb81', wickDownColor: '#f6465d' });
+  state.series.ema20 = state.chart.addLineSeries({ color: '#f0b90b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'EMA20' });
+  state.series.ema50 = state.chart.addLineSeries({ color: '#4f8cff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'EMA50' });
+  state.series.volume = state.chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: '', color: '#2b3139' });
+  state.series.volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+  new ResizeObserver(() => state.chart.applyOptions({ width: el.clientWidth })).observe(el);
 }
 
-function renderAnalysis(a, symbol) {
-  $('aSignal').className = a.signal === 'long' ? 'badge long' : a.signal === 'short' ? 'badge short' : 'badge flat';
-  $('aSignal').textContent = a.signal.toUpperCase();
-  $('aReason').textContent = a.reason || '';
-  $('aSymbol').textContent = symbol;
-  $('aPrice').textContent = num(a.price, 8);
-  $('aTime').textContent = a.candleTime || '-';
-  $('aCross').textContent = a.crossUp ? 'MA fast cross UP' : a.crossDown ? 'MA fast cross DOWN' : (a.dipLong ? 'dip_catcher (pullback+reclaim)' : 'belum ada');
-  $('aFastLabel').textContent = 'MA ' + a.fast;
-  $('aSlowLabel').textContent = 'MA ' + a.slow;
-  $('aTrendLabel').textContent = 'MA ' + a.trend;
-  $('aFast').textContent = num(a.maFast, 8);
-  $('aSlow').textContent = num(a.maSlow, 8);
-  $('aTrend').textContent = num(a.maTrend, 8);
+function renderChart(data) {
+  ensureChart();
+  const s = state.series;
+  s.candle.setData(data.candles);
+  s.ema20.setData(ema(data.candles.map(c => c.close), 20).map((v, i) => ({ time: data.candles[i].time, value: v })).filter(x => x.value != null));
+  s.ema50.setData(ema(data.candles.map(c => c.close), 50).map((v, i) => ({ time: data.candles[i].time, value: v })).filter(x => x.value != null));
+  s.volume.setData(data.candles.map(c => ({ time: c.time, value: c.volume || 0, color: c.close >= c.open ? 'rgba(14,203,129,.35)' : 'rgba(246,70,93,.35)' })));
+  s.candle.setMarkers(data.markers || []);
+  const last = data.candles[data.candles.length - 1];
+  if (s.priceLine) { s.candle.removePriceLine(s.priceLine); }
+  s.priceLine = s.candle.createPriceLine({ price: last.close, color: '#848e9c', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Last' });
+  state.chart.timeScale().fitContent();
 }
 
-async function loadChart() {
-  setMsg($('chartMsg'), 'memuat...');
+/* ---------- Recommendation & Analysis ---------- */
+function renderRecommendation(ind, analysis, trends) {
+  const rec = buildRecommendation(ind, analysis, trends);
+  state.lastRec = rec;
+  $('recSignal').className = 'signal-badge ' + rec.signal;
+  $('recSignal').textContent = rec.signal;
+  $('recConfText').textContent = rec.confidence + '%';
+  $('recConfBar').style.width = rec.confidence + '%';
+  $('recEntry').textContent = rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-';
+  $('recTp').textContent = rec.tp != null ? fmtPrice(rec.tp) : '-';
+  $('recSl').textContent = rec.sl != null ? fmtPrice(rec.sl) : '-';
+  $('recRr').textContent = rec.rr != null ? '1 : ' + rec.rr.toFixed(2) : '-';
+}
+
+function buildRecommendation(ind, analysis, trends) {
+  if (!ind || !analysis) return { signal: 'HOLD', confidence: 0, entryLow: null, entryHigh: null, tp: null, sl: null, rr: null };
+  const price = ind.last;
+  const bullish = analysis.signal === 'long' || (trends && trends.overallTrend === 'Bullish');
+  const bearish = analysis.signal === 'short' || (trends && trends.overallTrend === 'Bearish');
+  let signal = 'HOLD';
+  if (bullish && !bearish) signal = 'BUY';
+  else if (bearish && !bullish) signal = 'SELL';
+
+  let score = 0, total = 0;
+  if (trends && trends.rows) {
+    for (const row of trends.rows) {
+      if (!row.trend) continue;
+      total += 1;
+      if (row.trend.startsWith('Bullish')) score += 1;
+      else if (row.trend.startsWith('Bearish')) score -= 1;
+    }
+  }
+  let confidence = total ? Math.round(Math.abs(score) / total * 100) : 40;
+  if (analysis.crossUp || analysis.crossDown) confidence = Math.min(95, confidence + 15);
+  if (signal === 'HOLD') confidence = Math.max(25, Math.min(55, confidence));
+
+  const atrVal = ind.atr || price * 0.01;
+  const dir = signal === 'SELL' ? -1 : 1;
+  const entryLow = price - atrVal * 0.25 * dir;
+  const entryHigh = price + atrVal * 0.25 * dir;
+  let tp = null, sl = null, rr = null;
+  if (signal !== 'HOLD') {
+    tp = price + dir * atrVal * 2;
+    sl = price - dir * atrVal;
+    rr = 2;
+  }
+  return { signal, confidence, entryLow, entryHigh, tp, sl, rr };
+}
+
+function renderAnalysis(ind, analysis, trends) {
+  if (!ind || !analysis) {
+    $('anTrend').textContent = '-'; $('anVolume').textContent = '-';
+    $('anMomentum').textContent = '-'; $('anRsi').textContent = '-';
+    $('anSummary').textContent = 'Data belum tersedia. Pastikan koneksi exchange dan API key aktif.';
+    return;
+  }
+  let trend = 'Sideways';
+  if (trends && trends.overallTrend === 'Bullish') trend = 'Bullish';
+  else if (trends && trends.overallTrend === 'Bearish') trend = 'Bearish';
+  else if (analysis.signal === 'long') trend = 'Bullish';
+  else if (analysis.signal === 'short') trend = 'Bearish';
+
+  const trendCls = trend === 'Bullish' ? 'badge-bull' : trend === 'Bearish' ? 'badge-bear' : 'badge-side';
+  $('anTrend').className = 'v badge ' + trendCls;
+  $('anTrend').textContent = trend;
+
+  $('anVolume').textContent = ind.volTrend > 0.05 ? 'Increasing' : ind.volTrend < -0.05 ? 'Decreasing' : 'Flat';
+  $('anVolume').className = 'v ' + (ind.volTrend > 0.05 ? 'up' : ind.volTrend < -0.05 ? 'down' : 'muted');
+
+  const strong = Math.abs(ind.momentum) > 0.001;
+  $('anMomentum').textContent = ind.momentum > 0 ? (strong ? 'Strong Up' : 'Weak Up') : (strong ? 'Strong Down' : 'Weak Down');
+  $('anMomentum').className = 'v ' + (ind.momentum > 0 ? 'up' : 'down');
+
+  const r = ind.rsi;
+  $('anRsi').textContent = r == null ? '-' : r.toFixed(1) + (r > 70 ? ' (Overbought)' : r < 30 ? ' (Oversold)' : '');
+  $('anRsi').className = 'v ' + (r == null ? 'muted' : r > 70 ? 'down' : r < 30 ? 'up' : '');
+
+  $('anSummary').textContent = buildSummary(ind, analysis, trends, trend);
+}
+
+function buildSummary(ind, analysis, trends, trend) {
+  const sym = pairLabel(state.ticker);
+  const r = ind.rsi;
+  const volTxt = ind.volTrend > 0.05 ? 'volume meningkat' : ind.volTrend < -0.05 ? 'volume menurun' : 'volume relatif stabil';
+  const momTxt = ind.momentum > 0.001 ? 'momentum positif' : ind.momentum < -0.001 ? 'momentum negatif' : 'momentum lemah';
+  const rsiTxt = r == null ? '' : r > 70 ? ' RSI menunjukkan kondisi overbought, waspada koreksi.' : r < 30 ? ' RSI oversold, berpotensi rebound.' : ' RSI berada di area netral.';
+  let mtf = '';
+  if (trends && trends.rows) {
+    const bull = trends.rows.filter(x => x.trend && x.trend.startsWith('Bullish')).length;
+    const bear = trends.rows.filter(x => x.trend && x.trend.startsWith('Bearish')).length;
+    mtf = ` Dari ${trends.rows.length} timeframe, ${bull} bullish dan ${bear} bearish.`;
+  }
+  const bias = trend === 'Bullish' ? 'Bias cenderung naik' : trend === 'Bearish' ? 'Bias cenderung turun' : 'Bias sideways';
+  return `${sym}: ${bias}, ${momTxt} dengan ${volTxt}.${mtf}${rsiTxt} Gunakan entry bertahap dan tetap pasang stop loss.`;
+}
+
+/* ---------- Balance & Positions ---------- */
+async function loadBalance() {
   try {
-    const qs = new URLSearchParams({
-      profile: $('cProfile').value,
-      market: $('cMarket').value,
-      symbol: $('cTicker').value,
-      timeframe: $('cTimeframe').value,
-      fast: $('cFast').value,
-      slow: $('cSlow').value,
-      trend: $('cTrend').value,
-      dip: $('cDip').checked ? 'true' : 'false',
-      dipLookback: $('cDipLookback').value,
-      limit: 400
-    });
-    const data = await api('/api/candles?' + qs.toString());
-    ensureChart();
-    candleSeries.setData(data.candles);
-    maSeries.fast.setData(data.ma.fast);
-    maSeries.slow.setData(data.ma.slow);
-    maSeries.trend.setData(data.ma.trend);
-    candleSeries.setMarkers(data.markers || []);
-    chart.timeScale().fitContent();
-    renderAnalysis(data.analysis, data.symbol);
-    $('aPos').textContent = data.position ? data.position.side + ' ' + data.position.contracts : 'flat';
-    setMsg($('chartMsg'), data.symbol + ' • ' + data.timeframe, 'msg ok');
+    const [bal, pos] = await Promise.all([
+      api('/api/balance?' + q({ profile: state.profile, market: state.market })),
+      api('/api/positions?' + q({ profile: state.profile })).catch(() => ({ positions: [] }))
+    ]);
+    const usdt = (bal.balances || []).find(b => b.currency === 'USDT');
+    const total = usdt ? usdt.total : 0;
+    const free = usdt ? usdt.free : 0;
+    const pnl = (pos.positions || []).reduce((s, p) => s + (Number(p.unrealizedPnl) || 0), 0);
+    $('balTotal').textContent = fmt(total, 2) + ' USDT';
+    $('balFree').textContent = fmt(free, 2) + ' USDT';
+    const pnlEl = $('balPnl');
+    pnlEl.textContent = (pnl >= 0 ? '+' : '') + fmt(pnl, 2) + ' USDT';
+    pnlEl.className = 'v ' + (pnl > 0 ? 'up' : pnl < 0 ? 'down' : '');
+    $('balPnlPct').textContent = total ? (pnl / total * 100 >= 0 ? '+' : '') + fmt(pnl / total * 100, 2) + '%' : '-';
   } catch (e) {
-    setMsg($('chartMsg'), e.message, 'msg err');
+    $('balTotal').textContent = '-'; $('balFree').textContent = '-'; $('balPnl').textContent = '-';
   }
 }
 
-$('loadChart').onclick = loadChart;
-
-async function loadTrends() {
-  setMsg($('trendMsg'), 'menganalisa...');
+async function loadPositions() {
+  const tbody = $('posRows');
   try {
-    const qs = new URLSearchParams({
-      profile: $('tProfile').value,
-      market: $('tMarket').value,
-      symbol: $('tTicker').value,
-      fast: $('tFast').value,
-      slow: $('tSlow').value,
-      trend: $('tTrend').value
-    });
-    const data = await api('/api/trends?' + qs.toString());
-    const rec = data.overallRecommendation;
-    $('tRec').className = 'rec ' + rec;
-    $('tRec').textContent = rec;
-    $('tOverall').textContent = `${data.symbol} • ${data.market} • tren ${data.overallTrend} (score ${data.score})`;
-    $('trendTable').querySelector('tbody').innerHTML = data.rows.map(r => {
-      if (r.error) return `<tr><td>${r.timeframe}</td><td colspan="7" class="err">${r.error}</td></tr>`;
-      const tcls = 'trend-' + r.trend.split(' ')[0];
-      return `<tr>
-        <td>${r.timeframe}</td>
-        <td class="${tcls}">${r.trend}</td>
-        <td>${num(r.price, 8)}</td>
-        <td>${num(r.maFast, 8)}</td>
-        <td>${num(r.maSlow, 8)}</td>
-        <td>${num(r.maTrend, 8)}</td>
-        <td>${r.signal}</td>
-        <td><span class="badge ${r.recommendation === 'HOLD' ? 'flat' : ''}">${r.recommendation}</span></td>
-      </tr>`;
-    }).join('');
-    setMsg($('trendMsg'), 'selesai', 'msg ok');
+    const data = await api('/api/positions?' + q({ profile: state.profile }));
+    const rows = data.positions || [];
+    $('posMsg').textContent = rows.length ? new Date().toLocaleTimeString() : '';
+    if (!rows.length) {
+      tbody.innerHTML = '';
+      $('posEmpty').classList.remove('hidden');
+      return;
+    }
+    $('posEmpty').classList.add('hidden');
+    tbody.innerHTML = rows.map(p => `<tr>
+      <td>${pairLabel(p.symbol)}</td>
+      <td><span class="side-tag ${p.side === 'long' ? 'long' : 'short'}">${String(p.side || '').toUpperCase()}</span></td>
+      <td>${fmtPrice(p.entryPrice)}</td>
+      <td>${fmtPrice(p.markPrice)}</td>
+      <td class="${(Number(p.unrealizedPnl) || 0) >= 0 ? 'up' : 'down'}">${fmt(p.unrealizedPnl, 2)}</td>
+      <td>
+        <button class="btn sm" data-view="${p.symbol}">View</button>
+        <button class="btn sm red" data-close="${p.symbol}" data-side="${p.side}">Close</button>
+      </td>
+    </tr>`).join('');
   } catch (e) {
-    setMsg($('trendMsg'), e.message, 'msg err');
+    tbody.innerHTML = '';
+    $('posEmpty').classList.remove('hidden');
+    $('posMsg').textContent = '';
   }
 }
 
-$('loadTrends').onclick = loadTrends;
-
-$('addTicker').onclick = async () => {
-  const ticker = $('newTicker').value.trim();
-  if (!ticker) return;
-  setMsg($('pairMsg'), 'menambah...');
-  try {
-    const data = await api('/api/tickers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker, profile: $('tProfile').value, market: $('tMarket').value })
-    });
-    updateTickers(data);
-    $('tTicker').value = data.pair.ticker;
-    $('cTicker').value = data.pair.ticker;
-    $('oTicker').value = data.pair.ticker;
-    $('newTicker').value = '';
-    const text = 'ditambahkan: ' + data.pair.ticker + ' (' + data.pair.symbol + ')' + (data.warning ? ' — ' + data.warning : '');
-    setMsg($('pairMsg'), text, data.warning ? 'msg warn' : 'msg ok');
-  } catch (e) {
-    setMsg($('pairMsg'), e.message, 'msg err');
-  }
-};
-
-$('newTicker').addEventListener('keydown', e => {
-  if (e.key === 'Enter') $('addTicker').click();
+$('posRows').addEventListener('click', e => {
+  const view = e.target.closest('[data-view]');
+  if (view) { selectPair(baseOf(view.dataset.view) + 'USDT'); return; }
+  const close = e.target.closest('[data-close]');
+  if (close) confirmTrade('close', pairLabel(close.dataset.close), close.dataset.side);
 });
 
-$('send').onclick = async () => {
-  setMsg($('ordermsg'), 'mengirim...');
-  $('result').textContent = '-';
-  const body = {
-    profile: $('posProfile').value,
-    market: $('oMarket').value,
-    ticker: $('oTicker').value,
-    action: $('oAction').value,
-    amount: $('oAmount').value ? Number($('oAmount').value) : undefined,
-    amountType: $('oAmountType').value,
-    price: $('oPrice').value ? Number($('oPrice').value) : undefined,
-    stopPrice: $('oStopPrice').value ? Number($('oStopPrice').value) : undefined
-  };
+/* ---------- Modals ---------- */
+function openModal(html) {
+  $('modalBox').innerHTML = html;
+  $('modalRoot').classList.remove('hidden');
+}
+function closeModal() { $('modalRoot').classList.add('hidden'); $('modalBox').innerHTML = ''; }
+$('modalRoot').addEventListener('click', e => { if (e.target.id === 'modalRoot') closeModal(); });
+
+function openSettings(message) {
+  const profiles = state.meta.profiles || [];
+  const profileField = profiles.length
+    ? `<select id="setProfile">${profiles.map(p => `<option ${p === state.profile ? 'selected' : ''}>${p}</option>`).join('')}</select>`
+    : `<input id="setProfile" placeholder="binance1" value="${(state.profile || '').replace(/"/g, '&quot;')}">`;
+  openModal(`
+    <div class="m-head"><h3>${message ? 'Setup' : 'Settings'}</h3><button class="close-x" data-close>×</button></div>
+    <div class="m-body">
+      ${message ? `<div class="muted" style="font-size:12px">${message}</div>` : ''}
+      <div class="field"><label>Webhook secret</label><input id="setSecret" type="password" value="${state.secret.replace(/"/g, '&quot;')}" placeholder="WEBHOOK_SECRET"></div>
+      <div class="field"><label>Profile</label>${profileField}</div>
+    </div>
+    <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="setSave">Simpan</button></div>`);
+}
+
+$('settingsBtn').onclick = () => openSettings();
+$('modalRoot').addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) closeModal();
+  if (e.target.id === 'setSave') {
+    state.secret = $('setSecret').value.trim();
+    state.profile = $('setProfile').value || state.meta.defaultProfile;
+    localStorage.setItem('stb_secret', state.secret);
+    closeModal();
+    toast('Settings disimpan', 'ok');
+    bootstrap();
+  }
+});
+
+$('addFavBtn').onclick = () => openModal(`
+  <div class="m-head"><h3>Tambah Favorite</h3><button class="close-x" data-close>×</button></div>
+  <div class="m-body">
+    <div class="field"><label>Pair Binance</label><input id="favTicker" placeholder="mis. ENAUSDT atau ENA/USDT"></div>
+    <div class="field"><label>Market</label><select id="favMarket"><option value="future" ${state.market === 'future' ? 'selected' : ''}>Futures</option><option value="spot" ${state.market === 'spot' ? 'selected' : ''}>Spot</option></select></div>
+  </div>
+  <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="favAdd">Tambah</button></div>`);
+$('modalRoot').addEventListener('click', async e => {
+  if (e.target.id !== 'favAdd') return;
+  const ticker = $('favTicker').value.trim();
+  if (!ticker) return;
   try {
-    const data = await placeOrder(body);
-    $('result').textContent = JSON.stringify(data, null, 2);
-    setMsg($('ordermsg'), 'order terkirim', 'msg ok');
-  } catch (e) {
-    $('result').textContent = e.message;
-    setMsg($('ordermsg'), e.message, 'msg err');
+    const res = await api('/api/tickers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker, profile: state.profile, market: $('favMarket').value }) });
+    closeModal();
+    toast('Favorite ditambahkan: ' + res.pair.ticker + (res.warning ? ' (peringatan: ' + res.warning + ')' : ''), 'ok');
+    await loadFavorites();
+    selectPair(res.pair.ticker);
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+function confirmTrade(side, pair, posSide) {
+  const rec = state.lastRec || {};
+  const label = side === 'close' ? 'Tutup Posisi' : 'Konfirmasi Order';
+  openModal(`
+    <div class="m-head"><h3>${label}</h3><button class="close-x" data-close>×</button></div>
+    <div class="m-body">
+      <div class="kv"><span class="k">Pair</span><span class="v">${pair}</span></div>
+      <div class="kv"><span class="k">Aksi</span><span class="v">${side === 'close' ? 'CLOSE ' + String(posSide || '').toUpperCase() : rec.signal || '-'}</span></div>
+      <div class="kv"><span class="k">Entry</span><span class="v">${rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-'}</span></div>
+      <div class="kv"><span class="k">Take Profit</span><span class="v up">${rec.tp != null ? fmtPrice(rec.tp) : '-'}</span></div>
+      <div class="kv"><span class="k">Stop Loss</span><span class="v down">${rec.sl != null ? fmtPrice(rec.sl) : '-'}</span></div>
+      <div class="field"><label>Amount (USDT)</label><input id="tradeAmount" type="number" value="10"></div>
+      <div class="muted" style="font-size:11px">Mode prototype: order tidak akan dieksekusi ke Binance.</div>
+    </div>
+    <div class="m-foot"><button class="btn" data-close>Batal</button><button class="btn primary" id="tradeConfirm">Konfirmasi</button></div>`);
+}
+$('modalRoot').addEventListener('click', e => {
+  if (e.target.id === 'tradeConfirm') {
+    closeModal();
+    toast('Prototype: order tidak dieksekusi. Hubungkan eksekusi setelah validasi.', 'ok');
+  }
+});
+
+$('detailBtn').onclick = async () => {
+  openModal(`<div class="m-head"><h3>Detail Analysis</h3><button class="close-x" data-close>×</button></div><div class="m-body" id="detailBody">Memuat...</div>`);
+  try {
+    const data = await api('/api/trends?' + q({ profile: state.profile, market: state.market, symbol: state.ticker }));
+    const rows = (data.rows || []).map(r => r.error
+      ? `<tr><td>${r.timeframe}</td><td colspan="4" class="down">${r.error}</td></tr>`
+      : `<tr><td>${r.timeframe}</td><td>${r.trend}</td><td>${fmtPrice(r.price)}</td><td>${r.signal}</td><td>${r.recommendation}</td></tr>`).join('');
+    $('detailBody').innerHTML = `
+      <div class="kv"><span class="k">Overall</span><span class="v">${data.overallTrend} → ${data.overallRecommendation}</span></div>
+      <table><thead><tr><th>TF</th><th>Trend</th><th>Harga</th><th>Sinyal</th><th>Rekomendasi</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) { $('detailBody').innerHTML = '<div class="down">' + e.message + '</div>'; }
+};
+
+$('tradeBtn').onclick = () => { if (state.ticker) confirmTrade(state.lastRec && state.lastRec.signal === 'SELL' ? 'sell' : 'buy', pairLabel(state.ticker)); };
+
+/* ---------- Wire up ---------- */
+$('tfRow').addEventListener('click', e => {
+  const btn = e.target.closest('.tf');
+  if (!btn) return;
+  document.querySelectorAll('.tf').forEach(b => b.classList.toggle('active', b === btn));
+  state.timeframe = btn.dataset.tf;
+  loadPair();
+});
+$('marketSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-market]');
+  if (!btn) return;
+  document.querySelectorAll('#marketSeg button').forEach(b => b.classList.toggle('active', b === btn));
+  state.market = btn.dataset.market;
+  loadFavorites().then(() => { loadBalance(); loadPositions(); loadPair(); });
+});
+$('pairStar').onclick = async () => {
+  if (!state.ticker) return;
+  if (state.custom.has(state.ticker)) {
+    try { await api('/api/tickers?ticker=' + encodeURIComponent(state.ticker), { method: 'DELETE' }); await loadFavorites(); toast('Favorite dihapus', 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
+  } else {
+    try { await api('/api/tickers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker: state.ticker, profile: state.profile, market: state.market }) }); await loadFavorites(); selectPair(state.ticker); toast('Ditambahkan ke favorites', 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
   }
 };
 
+function setStatus(on) {
+  $('botStatus').classList.toggle('on', on);
+  $('botStatusText').textContent = on ? 'Running' : 'Stopped';
+}
+
 async function bootstrap() {
-  if (!secretInput.value) return;
+  if (!state.secret) {
+    setStatus(false);
+    openSettings('Masukkan webhook secret untuk mulai memantau market.');
+    return;
+  }
   try {
-    await loadMeta();
-    connectBalanceStream();
-    connectPositionStream();
+    state.meta = await api('/api/meta');
+    state.profile = state.profile || state.meta.defaultProfile;
+    $('avatar').textContent = (state.profile || 'B').charAt(0).toUpperCase();
+    setStatus(true);
+    await loadFavorites();
+    const first = state.favorites[0] && state.favorites[0].ticker;
+    if (first) selectPair(first);
+    loadBalance();
+    loadPositions();
+    if (state.poll) clearInterval(state.poll);
+    state.poll = setInterval(() => { refreshFavoritePrices(); if (state.ticker) loadPair(); }, 15000);
   } catch (e) {
-    setMsg($('authmsg'), e.message, 'msg err');
+    setStatus(false);
+    toast(e.message, 'err');
+    $('favList').innerHTML = '<div class="empty">Gagal memuat. Periksa secret/settings.</div>';
   }
 }
 

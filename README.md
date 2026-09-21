@@ -33,22 +33,23 @@ Endpoint:
 
 ## Dashboard
 
-Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** di halaman (harus sama dengan `WEBHOOK_SECRET`), lalu:
-- **Saldo Binance (live)** — streaming saldo spot/futures via SSE, refresh otomatis tiap N detik.
-- **Open posisi futures (live)** — kartu terpisah dengan Profile sendiri, streaming posisi terbuka (PnL, entry, mark, leverage) plus aksi per posisi:
-  - **Close** — menutup posisi (reduce-only).
-  - **Stop** — memasang stop market reduce-only; masukkan harga trigger saat diminta.
-- **Order manual** — digabung dalam kartu yang sama dengan Open Posisi: form buy/sell/close/stop tanpa perlu TradingView. Action `stop` memakai field **Stop price**.
-- **Chart** — candlestick dengan overlay MA fast/slow/trend (default 7/25/99), marker sinyal `L`/`S`, dan marker `DIP` (aktifkan checkbox **dip_catcher**), sumber candle dari exchange (ccxt).
-- **Analisa MA** — sinyal (long/short/none), harga, nilai MA, status cross, alasan, dan posisi saat ini.
-- **Rekomendasi aksi (trend market)** — analisa multi-timeframe (5m/15m/1h/4h/1d) memakai MA fast/slow/trend, menampilkan klasifikasi tren tiap timeframe (`Bullish kuat`/`Bullish`/`Bearish`/`Netral`) dan rekomendasi akhir `BUY`/`SELL` (spot) atau `LONG`/`SHORT` (future), plus `HOLD` bila netral.
-- **Tambah pair** — input di card Rekomendasi untuk menambah ticker pair (mis. `ADAUSDT` atau `ADA/USDT`) yang langsung bisa dicek/dianalisa (chart & trend). Tersimpan di `watchlist.json`; pair diturunkan otomatis ke simbol spot & futures.
+Buka `http://localhost:8787/dashboard` (atau `/`). Isi **Webhook secret** (ikon Settings, atau modal setup saat pertama kali) — harus sama dengan `WEBHOOK_SECRET`.
+
+Layout trading terminal (dark, minimalis):
+- **Header** — logo, status bot (Running/Stopped), toggle Spot/Futures, Settings, avatar profile.
+- **Sidebar Favorites** (kiri) — daftar pair favorit + harga & perubahan 24 jam, pencarian, tombol **+ Add Favorite**, dan bintang untuk menghapus dari watchlist. Klik pair → seluruh dashboard mengikuti.
+- **Balance Summary** (lebar penuh) — Total Balance, Available Balance, Today's PnL (nilai & %).
+- **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D), candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir. Kolom kanan **Bot Recommendation** (signal BUY/SELL/HOLD, confidence, entry range, TP, SL, risk/reward, tombol Trade with Bot) dan **Market Analysis** (trend, volume, momentum, RSI, ringkasan analisa Bahasa Indonesia, View Detail).
+- **Open Positions** (lebar penuh) — tabel posisi (Pair, Side, Entry, Mark, PnL, aksi View/Close) atau empty state.
+
+Catatan: tombol **Trade with Bot** dan **Close** hanya menampilkan modal konfirmasi (**prototype — tidak mengeksekusi order** ke Binance).
 
 Endpoint internal (semua butuh secret):
 - `GET /api/meta` — daftar profile, ticker, timeframe, default MA.
 - `GET /api/tickers` — daftar pair tambahan di watchlist.
 - `POST /api/tickers` — tambah pair. Body: `{"ticker":"ADAUSDT","profile":"binance1","market":"spot"}` (opsional `symbol`/`futureSymbol` untuk override).
 - `DELETE /api/tickers?ticker=ADAUSDT` — hapus pair dari watchlist.
+- `GET /api/ticker?profile=&market=&symbol=` — statistik 24 jam (harga, open, high, low, volume, perubahan %).
 - `GET /api/balance?profile=&market=` — saldo.
 - `GET /api/positions?profile=` — posisi futures.
 - `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=` — candle + MA + marker + analisa.
