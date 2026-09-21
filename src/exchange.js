@@ -29,8 +29,8 @@ export function marketAllowed(profile, market) {
   return false;
 }
 
-export function getExchange(profile, market) {
-  const key = `${profile.id}:${market}`;
+export function getExchange(profile, market, { public: isPublic = false } = {}) {
+  const key = `${profile.id}:${market}:${isPublic ? 'public' : 'private'}`;
   if (cache.has(key)) {
     return cache.get(key);
   }
@@ -41,12 +41,17 @@ export function getExchange(profile, market) {
   }
 
   const instance = new ExchangeClass({
-    apiKey: profile.apiKey,
-    secret: profile.secret,
-    ...(profile.password ? { password: profile.password } : {}),
+    ...(isPublic ? {} : {
+      apiKey: profile.apiKey,
+      secret: profile.secret,
+      ...(profile.password ? { password: profile.password } : {})
+    }),
     enableRateLimit: true,
     options: {
-      defaultType: market === 'future' ? 'future' : 'spot'
+      defaultType: market === 'future' ? 'future' : 'spot',
+      fetchMarkets: { types: market === 'future' ? ['linear'] : ['spot'] },
+      adjustForTimeDifference: true,
+      recvWindow: 60000
     }
   });
 

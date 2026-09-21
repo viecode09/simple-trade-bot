@@ -4,7 +4,8 @@ import { loadConfig } from './config.js';
 import { logger } from './logger.js';
 import { executeAction, getBalance, getPositions, resolveSymbol } from './trader.js';
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
-import { buildChart, MA_DEFAULTS } from './strategy.js';
+import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
+import { describeError } from './errors.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -83,6 +84,26 @@ function buildMeta(config) {
   };
 }
 
+async function checkClock(config) {
+  const profile = (config.profiles || [])[0];
+  if (!profile) return;
+  for (const market of ['spot', 'future']) {
+    if (!marketAllowed(profile, market)) continue;
+    try {
+      const exchange = getExchange(profile, market, { public: true });
+      await exchange.loadMarkets();
+      const offset = exchange.timeDifference ?? 0;
+      if (Math.abs(offset) > 1000) {
+        logger.warn(`Jam server bergeser ${offset}ms dari ${profile.exchange} (${market}). Sinkronkan waktu: "sudo timedatectl set-ntp true" lalu restart service.`);
+      } else {
+        logger.info(`Waktu server sinkron dengan ${profile.exchange} (${market}), offset ${offset}ms`);
+      }
+    } catch {
+      // exchange/jaringan tidak tersedia saat startup, abaikan
+    }
+  }
+}
+
 export function startWebhookServer() {
   const config = loadConfig();
   const host = config.server?.host || '0.0.0.0';
@@ -151,7 +172,7 @@ export function startWebhookServer() {
         if (!marketAllowed(profile, market)) {
           throw new Error(`Market "${market}" is disabled for profile "${profile.id}"`);
         }
-        const exchange = getExchange(profile, market);
+        const exchange = getExchange(profile, market, { public: true });
         await exchange.loadMarkets();
         const symbol = resolveSymbol(config, url.searchParams.get('symbol') || url.searchParams.get('ticker'), market);
         const timeframe = url.searchParams.get('timeframe') || MA_DEFAULTS.timeframe;
@@ -159,8 +180,10 @@ export function startWebhookServer() {
         const slow = Number(url.searchParams.get('slow')) || MA_DEFAULTS.slow;
         const trend = Number(url.searchParams.get('trend')) || MA_DEFAULTS.trend;
         const limit = Math.max(Number(url.searchParams.get('limit')) || 300, trend + 2);
+        const dip = url.searchParams.get('dip') === 'true' || url.searchParams.get('dip') === '1';
+        const dipLookback = Number(url.searchParams.get('dipLookback')) || undefined;
         const candles = await exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
-        const chart = buildChart(candles, { fast, slow, trend });
+        const chart = buildChart(candles, { fast, slow, trend, dip, dipLookback });
 
         let position = null;
         if (market === 'future') {
@@ -184,6 +207,7 @@ export function startWebhookServer() {
 
         const profileId = url.searchParams.get('profile');
         const market = normalizeMarket(url.searchParams.get('market'));
+        const scope = url.searchParams.get('scope') || 'both';
         const interval = Math.max(2, Number(url.searchParams.get('interval')) || 5) * 1000;
 
         res.writeHead(200, {
@@ -205,15 +229,19 @@ export function startWebhookServer() {
 
         const tick = async () => {
           if (closed) return;
-          try {
-            send('balance', { market, balances: await getBalance(profileId, market) });
-          } catch (e) {
-            send('streamerror', { scope: 'balance', error: e.message || String(e) });
+          if (scope === 'balance' || scope === 'both') {
+            try {
+              send('balance', { market, balances: await getBalance(profileId, market) });
+            } catch (e) {
+              send('streamerror', { scope: 'balance', error: describeError(e) });
+            }
           }
-          try {
-            send('positions', { positions: await getPositions(profileId) });
-          } catch (e) {
-            send('streamerror', { scope: 'positions', error: e.message || String(e) });
+          if (scope === 'positions' || scope === 'both') {
+            try {
+              send('positions', { positions: await getPositions(profileId) });
+            } catch (e) {
+              send('streamerror', { scope: 'positions', error: describeError(e) });
+            }
           }
           if (!closed) {
             setTimeout(tick, interval);
@@ -221,6 +249,29 @@ export function startWebhookServer() {
         };
 
         tick();
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/api/trends') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const profile = getProfile(url.searchParams.get('profile'));
+        const market = normalizeMarket(url.searchParams.get('market'));
+        if (!marketAllowed(profile, market)) {
+          throw new Error(`Market "${market}" is disabled for profile "${profile.id}"`);
+        }
+        const exchange = getExchange(profile, market, { public: true });
+        await exchange.loadMarkets();
+        const symbol = resolveSymbol(config, url.searchParams.get('symbol') || url.searchParams.get('ticker'), market);
+        const requested = (url.searchParams.get('timeframes') || '').split(',').map(s => s.trim()).filter(Boolean);
+        const fast = Number(url.searchParams.get('fast')) || MA_DEFAULTS.fast;
+        const slow = Number(url.searchParams.get('slow')) || MA_DEFAULTS.slow;
+        const trend = Number(url.searchParams.get('trend')) || MA_DEFAULTS.trend;
+
+        const report = await buildTrendReport(exchange, symbol, market, requested.length ? requested : TREND_TIMEFRAMES, { fast, slow, trend });
+        sendJson(res, 200, { ok: true, profile: profile.id, market, symbol, ...report });
         return;
       }
 
@@ -243,7 +294,8 @@ export function startWebhookServer() {
           action: payload.action || payload.side,
           amount: payload.amount,
           amountType: payload.amountType,
-          price: payload.price
+          price: payload.price,
+          stopPrice: payload.stopPrice ?? payload.stop_price ?? payload.triggerPrice
         });
 
         sendJson(res, 200, { ok: true, ...result });
@@ -252,13 +304,15 @@ export function startWebhookServer() {
 
       sendJson(res, 404, { ok: false, error: 'not found' });
     } catch (e) {
-      logger.error(`Webhook error: ${e.message || e}`);
-      sendJson(res, 400, { ok: false, error: e.message || String(e) });
+      const message = describeError(e);
+      logger.error(`Webhook error: ${message}`);
+      sendJson(res, 400, { ok: false, error: message });
     }
   });
 
   server.listen(port, host, () => {
     logger.info(`Webhook listening on http://${host}:${port}/webhook (dashboard: /dashboard, health: /health)`);
+    checkClock(config);
   });
 
   const shutdown = () => {

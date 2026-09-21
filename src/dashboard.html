@@ -14,12 +14,13 @@
   }
   h1 { font-size: 18px; margin: 0 0 16px; display: flex; align-items: center; gap: 12px; }
   h3 { margin: 18px 0 8px; font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+  h3.first { margin-top: 0; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .card.main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 900px) { .card.main { grid-template-columns: 1fr; } }
   label { display: flex; flex-direction: column; gap: 4px; color: #8b949e; font-size: 12px; }
+  label.chk { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 8px; }
+  label.chk input { accent-color: #d29922; width: 16px; height: 16px; }
   input, select {
     background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px;
     padding: 8px 10px; font: inherit;
@@ -29,7 +30,11 @@
     padding: 9px 14px; font: inherit; cursor: pointer;
   }
   button.ghost { background: #21262d; border-color: #30363d; }
+  button.sm { padding: 4px 10px; font-size: 12px; }
+  button.danger { background: #3d1418; border-color: #f85149; color: #f85149; }
+  button.warnbtn { background: #3a2d0a; border-color: #d29922; color: #d29922; }
   button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   table { width: 100%; border-collapse: collapse; margin-top: 4px; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #21262d; white-space: nowrap; }
   th { color: #8b949e; font-weight: 400; }
@@ -42,15 +47,24 @@
   .badge.long { background: #12351f; border-color: #2ea043; color: #3fb950; }
   .badge.short { background: #3d1418; border-color: #f85149; color: #f85149; }
   .badge.flat { color: #8b949e; }
+  .rec { font-size: 20px; font-weight: 700; padding: 6px 16px; border-radius: 8px; letter-spacing: 1px; }
+  .rec.BUY, .rec.LONG { background: #12351f; color: #3fb950; border: 1px solid #2ea043; }
+  .rec.SELL, .rec.SHORT { background: #3d1418; color: #f85149; border: 1px solid #f85149; }
+  .rec.HOLD { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+  .trend-Bullish { color: #3fb950; }
+  .trend-Bearish { color: #f85149; }
+  .trend-Netral { color: #8b949e; }
   .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #21262d; }
   .stat span:first-child { color: #8b949e; }
   .legend { display: flex; gap: 14px; font-size: 12px; color: #8b949e; margin: 6px 0; }
   .legend i { width: 10px; height: 10px; display: inline-block; margin-right: 4px; }
   #chart { width: 100%; height: 380px; }
+  hr { border: none; border-top: 1px solid #30363d; margin: 18px 0; }
+  .actions { display: flex; gap: 6px; }
 </style>
 </head>
 <body>
-  <h1>simple-trade-bot <span id="streamDot" class="dot" title="stream"></span></h1>
+  <h1>simple-trade-bot</h1>
 
   <section class="card">
     <div class="row">
@@ -62,34 +76,86 @@
     </div>
   </section>
 
-  <section class="card main">
-    <div>
-      <div class="row">
-        <label>Profile <select id="profile"></select></label>
-        <label>Market <select id="balMarket"><option>spot</option><option>future</option></select></label>
-        <button id="loadBal" class="ghost">Refresh</button>
-      </div>
-      <h3>Saldo Binance (live)</h3>
-      <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
+  <section class="card">
+    <div class="row">
+      <label>Profile <select id="balProfile"></select></label>
+      <label>Market <select id="balMarket"><option>spot</option><option>future</option></select></label>
+      <label>Interval stream (s) <select id="balInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
+      <button id="loadBal" class="ghost">Refresh</button>
+      <span id="balDot" class="dot" title="stream balance"></span>
     </div>
-    <div>
-      <div class="row">
-        <label>Interval stream (s) <select id="streamInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
-      </div>
-      <h3>Open posisi futures (live)</h3>
-      <table id="posTable"><thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th></tr></thead><tbody></tbody></table>
-      <div id="streamMsg" class="msg"></div>
-    </div>
+    <h3>Saldo Binance (live)</h3>
+    <table id="balTable"><thead><tr><th>Coin</th><th>Total</th><th>Free</th><th>Used</th></tr></thead><tbody></tbody></table>
+    <div id="balMsg" class="msg"></div>
   </section>
 
   <section class="card">
     <div class="row">
-      <label>Ticker <input id="cTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
+      <label>Profile <select id="posProfile"></select></label>
+      <label>Interval stream (s) <select id="posInterval"><option>3</option><option selected>5</option><option>10</option><option>30</option></select></label>
+      <button id="loadPos" class="ghost">Refresh</button>
+      <span id="posDot" class="dot" title="stream posisi"></span>
+    </div>
+
+    <h3 class="first">Open posisi futures (live)</h3>
+    <table id="posTable">
+      <thead><tr><th>Symbol</th><th>Side</th><th>Contracts</th><th>Entry</th><th>Mark</th><th>PnL</th><th>Lev</th><th>Aksi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="posMsg" class="msg"></div>
+
+    <hr>
+
+    <h3 class="first">Order manual</h3>
+    <div class="grid">
+      <label>Market <select id="oMarket"><option>spot</option><option selected>future</option></select></label>
+      <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"><datalist id="tickers"></datalist></label>
+      <label>Action <select id="oAction"><option>long</option><option>short</option><option>close</option><option>stop</option></select></label>
+      <label>Amount <input id="oAmount" type="number" step="any" placeholder="50"></label>
+      <label>Amount type <select id="oAmountType"><option>quote</option><option>base</option></select></label>
+      <label>Price (opsional) <input id="oPrice" type="number" step="any" placeholder="market"></label>
+      <label>Stop price (untuk action stop) <input id="oStopPrice" type="number" step="any" placeholder="mis. 60000"></label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="send">Kirim order</button>
+      <span id="ordermsg" class="msg"></span>
+    </div>
+    <pre id="result">-</pre>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <label>Profile <select id="tProfile"></select></label>
+      <label>Market <select id="tMarket"><option>future</option><option>spot</option></select></label>
+      <label>Ticker <input id="tTicker" list="tickers" placeholder="BTCUSDT"></label>
+      <label>MA fast <input id="tFast" type="number" value="7"></label>
+      <label>MA slow <input id="tSlow" type="number" value="25"></label>
+      <label>MA trend <input id="tTrend" type="number" value="99"></label>
+      <button id="loadTrends">Analisa tren</button>
+      <span id="trendMsg" class="msg"></span>
+    </div>
+    <h3>Rekomendasi aksi (trend market Binance)</h3>
+    <div class="row" style="gap:16px; align-items:center; margin-bottom:8px">
+      <span id="tRec" class="rec HOLD">-</span>
+      <span id="tOverall" class="msg"></span>
+    </div>
+    <table id="trendTable">
+      <thead><tr><th>Timeframe</th><th>Tren</th><th>Harga</th><th>MA fast</th><th>MA slow</th><th>MA trend</th><th>Sinyal</th><th>Rekomendasi</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <label>Profile <select id="cProfile"></select></label>
+      <label>Ticker <input id="cTicker" list="tickers" placeholder="BTCUSDT"></label>
       <label>Market <select id="cMarket"><option>future</option><option>spot</option></select></label>
       <label>Timeframe <select id="cTimeframe"></select></label>
       <label>MA fast <input id="cFast" type="number" value="7"></label>
       <label>MA slow <input id="cSlow" type="number" value="25"></label>
       <label>MA trend <input id="cTrend" type="number" value="99"></label>
+      <label class="chk" title="Long saat pullback ke MA slow lalu reclaim (selama di atas MA trend)"><input id="cDip" type="checkbox"> dip_catcher</label>
+      <label>Dip lookback <input id="cDipLookback" type="number" min="1" value="3"></label>
       <button id="loadChart">Muat chart</button>
       <span id="chartMsg" class="msg"></span>
     </div>
@@ -99,12 +165,13 @@
       <span><i style="background:#bc8cff"></i>MA trend</span>
       <span><i style="background:#3fb950"></i>signal L</span>
       <span><i style="background:#f85149"></i>signal S</span>
+      <span><i style="background:#d29922"></i>dip</span>
     </div>
     <div id="chart"></div>
   </section>
 
   <section class="card">
-    <h3>Analisa MA</h3>
+    <h3 class="first">Analisa MA</h3>
     <div class="row" style="margin-bottom:8px">
       <span id="aSignal" class="badge flat">-</span>
       <span id="aReason" class="msg"></span>
@@ -125,41 +192,24 @@
     </div>
   </section>
 
-  <section class="card">
-    <h3>Order manual</h3>
-    <div class="grid">
-      <label>Market <select id="oMarket"><option>spot</option><option>future</option></select></label>
-      <label>Ticker <input id="oTicker" list="tickers" placeholder="BTCUSDT"></label>
-      <label>Action <select id="oAction"><option>long</option><option>short</option><option>close</option></select></label>
-      <label>Amount <input id="oAmount" type="number" step="any" placeholder="50"></label>
-      <label>Amount type <select id="oAmountType"><option>quote</option><option>base</option></select></label>
-      <label>Price (opsional) <input id="oPrice" type="number" step="any" placeholder="market"></label>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <button id="send">Kirim order</button>
-      <span id="ordermsg" class="msg"></span>
-    </div>
-    <pre id="result">-</pre>
-  </section>
-
 <script>
 const $ = id => document.getElementById(id);
 const secretInput = $('secret');
-const streamDot = $('streamDot');
 secretInput.value = localStorage.getItem('stb_secret') || '';
 
-let stream = null;
+let meta = {};
+let balanceStream = null;
+let positionStream = null;
 let chart = null;
 let candleSeries = null;
 let maSeries = { fast: null, slow: null, trend: null };
-let meta = {};
 
-function headers(extra) {
+function authHeaders(extra) {
   return Object.assign({ 'x-webhook-secret': secretInput.value }, extra || {});
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, Object.assign({}, options, { headers: headers(options.headers) }));
+  const res = await fetch(path, Object.assign({}, options, { headers: authHeaders(options.headers) }));
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -177,7 +227,7 @@ function fill(select, values, selected) {
 
 function num(v, digits = 4) {
   const n = Number(v);
-  return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: digits }) : v ?? '-';
+  return Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: digits }) : (v ?? '-');
 }
 
 function pnlClass(v) {
@@ -194,13 +244,24 @@ $('save').onclick = () => {
 
 async function loadMeta() {
   meta = await api('/api/meta');
-  fill($('profile'), meta.profiles.length ? meta.profiles : [meta.defaultProfile], meta.defaultProfile);
+  const profiles = meta.profiles.length ? meta.profiles : [meta.defaultProfile];
+  fill($('balProfile'), profiles, meta.defaultProfile);
+  fill($('posProfile'), profiles, meta.defaultProfile);
+  fill($('cProfile'), profiles, meta.defaultProfile);
+  fill($('tProfile'), profiles, meta.defaultProfile);
   $('tickers').innerHTML = meta.tickers.map(t => `<option value="${t}">`).join('');
+  if (meta.tickers[0]) {
+    $('cTicker').value = meta.tickers[0];
+    $('tTicker').value = meta.tickers[0];
+  }
   fill($('cTimeframe'), meta.timeframes, '15m');
   if (meta.maDefaults) {
     $('cFast').value = meta.maDefaults.fast;
     $('cSlow').value = meta.maDefaults.slow;
     $('cTrend').value = meta.maDefaults.trend;
+    $('tFast').value = meta.maDefaults.fast;
+    $('tSlow').value = meta.maDefaults.slow;
+    $('tTrend').value = meta.maDefaults.trend;
   }
   setMsg($('authmsg'), 'secret valid', 'msg ok');
 }
@@ -212,50 +273,133 @@ function renderBalance(rows) {
 }
 
 function renderPositions(rows) {
-  $('posTable').querySelector('tbody').innerHTML =
-    rows.map(r => `<tr><td>${r.symbol}</td><td>${r.side}</td><td>${num(r.contracts)}</td><td>${num(r.entryPrice, 8)}</td><td>${num(r.markPrice, 8)}</td><td class="${pnlClass(r.unrealizedPnl)}">${num(r.unrealizedPnl, 4)}</td><td>${r.leverage ?? '-'}</td></tr>`).join('')
-    || '<tr><td colspan="7">kosong</td></tr>';
-}
-
-function connectStream() {
-  if (stream) { stream.close(); stream = null; }
-  const profile = $('profile').value;
-  if (!profile || !secretInput.value) {
-    streamDot.classList.remove('on');
+  const tbody = $('posTable').querySelector('tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8">kosong</td></tr>';
     return;
   }
+  tbody.innerHTML = rows.map(r => {
+    const sym = r.symbol || '';
+    return `<tr>
+      <td>${sym}</td>
+      <td><span class="badge ${r.side === 'long' ? 'long' : 'short'}">${r.side}</span></td>
+      <td>${num(r.contracts)}</td>
+      <td>${num(r.entryPrice, 8)}</td>
+      <td>${num(r.markPrice, 8)}</td>
+      <td class="${pnlClass(r.unrealizedPnl)}">${num(r.unrealizedPnl, 4)}</td>
+      <td>${r.leverage ?? '-'}</td>
+      <td class="actions">
+        <button class="sm danger" data-action="close" data-symbol="${sym}">Close</button>
+        <button class="sm warnbtn" data-action="stop" data-symbol="${sym}">Stop</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function connectBalanceStream() {
+  if (balanceStream) { balanceStream.close(); balanceStream = null; }
+  const profile = $('balProfile').value;
+  if (!profile || !secretInput.value) { $('balDot').classList.remove('on'); return; }
+
   const qs = new URLSearchParams({
     secret: secretInput.value,
+    scope: 'balance',
     profile,
     market: $('balMarket').value,
-    interval: $('streamInterval').value
+    interval: $('balInterval').value
   });
-  stream = new EventSource('/api/stream?' + qs.toString());
+  balanceStream = new EventSource('/api/stream?' + qs.toString());
 
-  stream.addEventListener('balance', e => {
-    streamDot.classList.add('on');
-    setMsg($('streamMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
+  balanceStream.addEventListener('balance', e => {
+    $('balDot').classList.add('on');
+    setMsg($('balMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
     renderBalance(JSON.parse(e.data).balances);
   });
-  stream.addEventListener('positions', e => {
-    renderPositions(JSON.parse(e.data).positions);
+  balanceStream.addEventListener('streamerror', e => {
+    const d = JSON.parse(e.data);
+    setMsg($('balMsg'), d.error, 'msg err');
   });
-  stream.addEventListener('streamerror', e => {
-    if (e.data) {
-      const d = JSON.parse(e.data);
-      setMsg($('streamMsg'), d.scope + ': ' + d.error, 'msg err');
-    }
-  });
-  stream.onerror = () => {
-    streamDot.classList.remove('on');
-    setMsg($('streamMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
+  balanceStream.onerror = () => {
+    $('balDot').classList.remove('on');
+    setMsg($('balMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
   };
 }
 
-$('loadBal').onclick = connectStream;
-$('profile').onchange = connectStream;
-$('balMarket').onchange = connectStream;
-$('streamInterval').onchange = connectStream;
+function connectPositionStream() {
+  if (positionStream) { positionStream.close(); positionStream = null; }
+  const profile = $('posProfile').value;
+  if (!profile || !secretInput.value) { $('posDot').classList.remove('on'); return; }
+
+  const qs = new URLSearchParams({
+    secret: secretInput.value,
+    scope: 'positions',
+    profile,
+    interval: $('posInterval').value
+  });
+  positionStream = new EventSource('/api/stream?' + qs.toString());
+
+  positionStream.addEventListener('positions', e => {
+    $('posDot').classList.add('on');
+    setMsg($('posMsg'), 'live • ' + new Date().toLocaleTimeString(), 'msg ok');
+    renderPositions(JSON.parse(e.data).positions);
+  });
+  positionStream.addEventListener('streamerror', e => {
+    const d = JSON.parse(e.data);
+    setMsg($('posMsg'), d.error, 'msg err');
+  });
+  positionStream.onerror = () => {
+    $('posDot').classList.remove('on');
+    setMsg($('posMsg'), 'stream terputus, mencoba ulang...', 'msg warn');
+  };
+}
+
+$('loadBal').onclick = connectBalanceStream;
+$('balProfile').onchange = connectBalanceStream;
+$('balMarket').onchange = connectBalanceStream;
+$('balInterval').onchange = connectBalanceStream;
+
+$('loadPos').onclick = connectPositionStream;
+$('posProfile').onchange = connectPositionStream;
+$('posInterval').onchange = connectPositionStream;
+
+async function placeOrder(body) {
+  return api('/api/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+$('posTable').addEventListener('click', async event => {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+  const action = button.dataset.action;
+  const symbol = button.dataset.symbol;
+  const profile = $('posProfile').value;
+
+  const buttons = $('posTable').querySelectorAll('button');
+  buttons.forEach(b => { b.disabled = true; });
+
+  try {
+    if (action === 'close') {
+      if (!confirm(`Tutup posisi ${symbol}?`)) return;
+      const data = await placeOrder({ profile, market: 'future', ticker: symbol, action: 'close' });
+      setMsg($('posMsg'), `close ${symbol} terkirim`, 'msg ok');
+      $('result').textContent = JSON.stringify(data, null, 2);
+    } else if (action === 'stop') {
+      const input = prompt(`Harga stop untuk ${symbol}:`);
+      if (!input) return;
+      const data = await placeOrder({ profile, market: 'future', ticker: symbol, action: 'stop', stopPrice: Number(input) });
+      setMsg($('posMsg'), `stop ${symbol} @ ${input} terkirim`, 'msg ok');
+      $('result').textContent = JSON.stringify(data, null, 2);
+    }
+  } catch (e) {
+    setMsg($('posMsg'), e.message, 'msg err');
+    $('result').textContent = e.message;
+  } finally {
+    buttons.forEach(b => { b.disabled = false; });
+  }
+});
 
 function ensureChart() {
   if (chart) return;
@@ -277,14 +421,13 @@ function ensureChart() {
 }
 
 function renderAnalysis(a, symbol) {
-  const cls = a.signal === 'long' ? 'badge long' : a.signal === 'short' ? 'badge short' : 'badge flat';
-  $('aSignal').className = cls;
+  $('aSignal').className = a.signal === 'long' ? 'badge long' : a.signal === 'short' ? 'badge short' : 'badge flat';
   $('aSignal').textContent = a.signal.toUpperCase();
   $('aReason').textContent = a.reason || '';
   $('aSymbol').textContent = symbol;
   $('aPrice').textContent = num(a.price, 8);
   $('aTime').textContent = a.candleTime || '-';
-  $('aCross').textContent = a.crossUp ? 'MA fast cross UP' : a.crossDown ? 'MA fast cross DOWN' : 'belum ada';
+  $('aCross').textContent = a.crossUp ? 'MA fast cross UP' : a.crossDown ? 'MA fast cross DOWN' : (a.dipLong ? 'dip_catcher (pullback+reclaim)' : 'belum ada');
   $('aFastLabel').textContent = 'MA ' + a.fast;
   $('aSlowLabel').textContent = 'MA ' + a.slow;
   $('aTrendLabel').textContent = 'MA ' + a.trend;
@@ -297,13 +440,15 @@ async function loadChart() {
   setMsg($('chartMsg'), 'memuat...');
   try {
     const qs = new URLSearchParams({
-      profile: $('profile').value,
+      profile: $('cProfile').value,
       market: $('cMarket').value,
       symbol: $('cTicker').value,
       timeframe: $('cTimeframe').value,
       fast: $('cFast').value,
       slow: $('cSlow').value,
       trend: $('cTrend').value,
+      dip: $('cDip').checked ? 'true' : 'false',
+      dipLookback: $('cDipLookback').value,
       limit: 400
     });
     const data = await api('/api/candles?' + qs.toString());
@@ -324,24 +469,59 @@ async function loadChart() {
 
 $('loadChart').onclick = loadChart;
 
+async function loadTrends() {
+  setMsg($('trendMsg'), 'menganalisa...');
+  try {
+    const qs = new URLSearchParams({
+      profile: $('tProfile').value,
+      market: $('tMarket').value,
+      symbol: $('tTicker').value,
+      fast: $('tFast').value,
+      slow: $('tSlow').value,
+      trend: $('tTrend').value
+    });
+    const data = await api('/api/trends?' + qs.toString());
+    const rec = data.overallRecommendation;
+    $('tRec').className = 'rec ' + rec;
+    $('tRec').textContent = rec;
+    $('tOverall').textContent = `${data.symbol} • ${data.market} • tren ${data.overallTrend} (score ${data.score})`;
+    $('trendTable').querySelector('tbody').innerHTML = data.rows.map(r => {
+      if (r.error) return `<tr><td>${r.timeframe}</td><td colspan="7" class="err">${r.error}</td></tr>`;
+      const tcls = 'trend-' + r.trend.split(' ')[0];
+      return `<tr>
+        <td>${r.timeframe}</td>
+        <td class="${tcls}">${r.trend}</td>
+        <td>${num(r.price, 8)}</td>
+        <td>${num(r.maFast, 8)}</td>
+        <td>${num(r.maSlow, 8)}</td>
+        <td>${num(r.maTrend, 8)}</td>
+        <td>${r.signal}</td>
+        <td><span class="badge ${r.recommendation === 'HOLD' ? 'flat' : ''}">${r.recommendation}</span></td>
+      </tr>`;
+    }).join('');
+    setMsg($('trendMsg'), 'selesai', 'msg ok');
+  } catch (e) {
+    setMsg($('trendMsg'), e.message, 'msg err');
+  }
+}
+
+$('loadTrends').onclick = loadTrends;
+
 $('send').onclick = async () => {
   setMsg($('ordermsg'), 'mengirim...');
   $('result').textContent = '-';
   const body = {
-    profile: $('profile').value,
+    profile: $('posProfile').value,
     market: $('oMarket').value,
     ticker: $('oTicker').value,
     action: $('oAction').value,
     amount: $('oAmount').value ? Number($('oAmount').value) : undefined,
     amountType: $('oAmountType').value,
-    price: $('oPrice').value ? Number($('oPrice').value) : undefined
+    price: $('oPrice').value ? Number($('oPrice').value) : undefined,
+    stopPrice: $('oStopPrice').value ? Number($('oStopPrice').value) : undefined
   };
   try {
-    const data = await api('/api/order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    const data = await placeOrder(body);
     $('result').textContent = JSON.stringify(data, null, 2);
     setMsg($('ordermsg'), 'order terkirim', 'msg ok');
   } catch (e) {
@@ -354,7 +534,8 @@ async function bootstrap() {
   if (!secretInput.value) return;
   try {
     await loadMeta();
-    connectStream();
+    connectBalanceStream();
+    connectPositionStream();
   } catch (e) {
     setMsg($('authmsg'), e.message, 'msg err');
   }

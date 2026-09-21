@@ -2,8 +2,9 @@ import { logger } from './logger.js';
 import { loadConfig } from './config.js';
 import { getExchange, getProfile, marketAllowed, normalizeMarket } from './exchange.js';
 import { executeAction, resolveSymbol } from './trader.js';
+import { describeError } from './errors.js';
 
-export const MA_DEFAULTS = { fast: 7, slow: 25, trend: 99, timeframe: '15m', interval: 30 };
+export const MA_DEFAULTS = { fast: 7, slow: 25, trend: 99, timeframe: '15m', interval: 30, dipLookback: 3 };
 
 export function smaSeries(values, period) {
   const out = new Array(values.length).fill(null);
@@ -53,18 +54,40 @@ export function analyze(candles, options = {}) {
   const crossDown = fastPrev >= slowPrev && fastNow < slowNow;
   const trendUp = price > trendNow;
 
+  const dip = options.dip === true || options.dip === 'true';
+  const dipLookback = Number(options.dipLookback) > 0 ? Math.floor(Number(options.dipLookback)) : MA_DEFAULTS.dipLookback;
+
+  let dipped = false;
+  let reclaim = false;
+  if (dip && slowNow != null && slowPrev != null) {
+    for (let j = Math.max(0, i - dipLookback); j < i; j += 1) {
+      if (maSlow[j] != null && closes[j] <= maSlow[j]) {
+        dipped = true;
+        break;
+      }
+    }
+    reclaim = closes[i - 1] <= slowPrev && price > slowNow;
+  }
+  const dipLong = dip && dipped && reclaim && trendUp;
+
   let signal = 'none';
+  let reason = null;
   if (crossUp && trendUp) {
     signal = 'long';
   } else if (crossDown && !trendUp) {
     signal = 'short';
+  } else if (dipLong) {
+    signal = 'long';
+    reason = `dip_catcher: pullback ke MA${slow} lalu reclaim di atas MA${slow} (tren > MA${trend})`;
+  } else {
+    reason = dip && dipped && reclaim && !trendUp
+      ? 'dip tapi tren di bawah MA99'
+      : (crossUp || crossDown) ? 'cross tanpa konfirmasi MA99' : 'belum ada sinyal';
   }
 
   return {
     signal,
-    reason: signal === 'none'
-      ? (crossUp || crossDown ? 'cross tanpa konfirmasi MA99' : 'belum ada cross')
-      : null,
+    reason,
     fast,
     slow,
     trend,
@@ -75,7 +98,12 @@ export function analyze(candles, options = {}) {
     maSlow: slowNow,
     maTrend: trendNow,
     crossUp,
-    crossDown
+    crossDown,
+    dip,
+    dipLookback,
+    dipped,
+    reclaim,
+    dipLong
   };
 }
 
@@ -101,28 +129,47 @@ export function buildChart(candles, options = {}) {
     close: Number(candle[4])
   }));
 
+  const dip = options.dip === true || options.dip === 'true';
+  const dipLookback = Number(options.dipLookback) > 0 ? Math.floor(Number(options.dipLookback)) : MA_DEFAULTS.dipLookback;
+
   const markers = [];
   for (let i = 1; i < closes.length; i += 1) {
     if (maFast[i - 1] == null || maSlow[i - 1] == null) continue;
+    const time = Math.floor(candles[i][0] / 1000);
     const crossUp = maFast[i - 1] <= maSlow[i - 1] && maFast[i] > maSlow[i];
     const crossDown = maFast[i - 1] >= maSlow[i - 1] && maFast[i] < maSlow[i];
-    if (!crossUp && !crossDown) continue;
     const trendOk = maTrend[i] != null;
-    const time = Math.floor(candles[i][0] / 1000);
+
     if (crossUp && trendOk && closes[i] > maTrend[i]) {
       markers.push({ time, position: 'belowBar', color: '#3fb950', shape: 'arrowUp', text: `L${fast}/${slow}` });
+      continue;
     }
     if (crossDown && trendOk && closes[i] < maTrend[i]) {
       markers.push({ time, position: 'aboveBar', color: '#f85149', shape: 'arrowDown', text: `S${fast}/${slow}` });
+      continue;
+    }
+
+    if (dip && trendOk) {
+      let dipped = false;
+      for (let j = Math.max(0, i - dipLookback); j < i; j += 1) {
+        if (maSlow[j] != null && closes[j] <= maSlow[j]) {
+          dipped = true;
+          break;
+        }
+      }
+      const reclaim = closes[i - 1] <= maSlow[i - 1] && closes[i] > maSlow[i];
+      if (dipped && reclaim && closes[i] > maTrend[i]) {
+        markers.push({ time, position: 'belowBar', color: '#d29922', shape: 'arrowUp', text: 'DIP' });
+      }
     }
   }
 
   return {
-    params: { fast, slow, trend },
+    params: { fast, slow, trend, dip, dipLookback },
     candles: chartCandles,
     ma: { fast: line(maFast), slow: line(maSlow), trend: line(maTrend) },
     markers,
-    analysis: analyze(candles, { fast, slow, trend })
+    analysis: analyze(candles, { fast, slow, trend, dip, dipLookback })
   };
 }
 
@@ -185,16 +232,26 @@ async function evaluate(request) {
     throw new Error(`Market "${market}" is disabled for profile "${profile.id}"`);
   }
 
-  const exchange = getExchange(profile, market);
-  await exchange.loadMarkets();
+  const marketExchange = getExchange(profile, market, { public: true });
+  await marketExchange.loadMarkets();
 
   const symbol = resolveSymbol(config, request.ticker, market);
   const timeframe = request.timeframe ?? MA_DEFAULTS.timeframe;
   const limit = (request.trend ?? MA_DEFAULTS.trend) + 5;
-  const candles = await exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
+  const candles = await marketExchange.fetchOHLCV(symbol, timeframe, undefined, limit);
 
   const analysis = analyze(candles, request);
-  const position = await currentPosition(exchange, market, symbol);
+
+  let position = 'flat';
+  try {
+    position = await currentPosition(getExchange(profile, market), market, symbol);
+  } catch (e) {
+    if (!request.dryRun) {
+      throw e;
+    }
+    position = 'unknown';
+  }
+
   const action = decideAction(position, analysis.signal, market);
 
   return {
@@ -258,8 +315,83 @@ export async function watchStrategy(request) {
 
       logAnalysis(evaluated, execution);
     } catch (e) {
-      logger.error(`Strategy error: ${e.message || e}`);
+      logger.error(`Strategy error: ${describeError(e)}`);
     }
     await sleep(interval * 1000);
   }
+}
+
+export const TREND_TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d'];
+
+export function classifyTrend(analysis) {
+  const { price, maFast, maSlow, maTrend, crossUp, crossDown } = analysis;
+  if (maFast == null || maSlow == null || maTrend == null) {
+    return 'Netral';
+  }
+  if (crossUp && price > maTrend) return 'Bullish kuat';
+  if (crossDown && price < maTrend) return 'Bearish kuat';
+  if (price > maTrend && maFast > maSlow) return 'Bullish';
+  if (price < maTrend && maFast < maSlow) return 'Bearish';
+  return 'Netral';
+}
+
+export function recommendAction(trend, market) {
+  const bullish = trend.startsWith('Bullish');
+  const bearish = trend.startsWith('Bearish');
+  if (market === 'spot') {
+    if (bullish) return 'BUY';
+    if (bearish) return 'SELL';
+    return 'HOLD';
+  }
+  if (bullish) return 'LONG';
+  if (bearish) return 'SHORT';
+  return 'HOLD';
+}
+
+export async function buildTrendReport(exchange, symbol, market, timeframes, options = {}) {
+  const fast = options.fast ?? MA_DEFAULTS.fast;
+  const slow = options.slow ?? MA_DEFAULTS.slow;
+  const trend = options.trend ?? MA_DEFAULTS.trend;
+  const limit = trend + 5;
+  const list = timeframes && timeframes.length ? timeframes : TREND_TIMEFRAMES;
+
+  const rows = [];
+  for (const timeframe of list) {
+    try {
+      const candles = await exchange.fetchOHLCV(symbol, timeframe, undefined, limit);
+      const analysis = analyze(candles, { fast, slow, trend });
+      const trendLabel = classifyTrend(analysis);
+      rows.push({
+        timeframe,
+        trend: trendLabel,
+        recommendation: recommendAction(trendLabel, market),
+        price: analysis.price,
+        maFast: analysis.maFast,
+        maSlow: analysis.maSlow,
+        maTrend: analysis.maTrend,
+        signal: analysis.signal,
+        crossUp: analysis.crossUp,
+        crossDown: analysis.crossDown
+      });
+    } catch (e) {
+      rows.push({ timeframe, error: e.message || String(e) });
+    }
+  }
+
+  const score = rows.reduce((total, row) => {
+    if (!row.trend) return total;
+    if (row.trend.startsWith('Bullish')) return total + 1;
+    if (row.trend.startsWith('Bearish')) return total - 1;
+    return total;
+  }, 0);
+
+  const overallTrend = score > 0 ? 'Bullish' : score < 0 ? 'Bearish' : 'Netral';
+
+  return {
+    params: { fast, slow, trend },
+    rows,
+    score,
+    overallTrend,
+    overallRecommendation: recommendAction(overallTrend, market)
+  };
 }

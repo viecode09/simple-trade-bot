@@ -2,6 +2,7 @@ import { logger } from './logger.js';
 import { startWebhookServer } from './webhook.js';
 import { executeAction, getBalance, getPositions } from './trader.js';
 import { runStrategyOnce, watchStrategy } from './strategy.js';
+import { describeError } from './errors.js';
 
 function parseArgs(tokens) {
   const args = {};
@@ -33,9 +34,12 @@ Usage:
       Show open futures positions.
 
   node src/index.js order --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --action=<long|short|close> --amount=<n> [--amount-type=quote|base] [--price=<n>]
+  node src/index.js order --profile=<id> --market=future --symbol=<SYMBOL> --action=stop --stop-price=<n> [--amount=<n>]
+      Stop market reduce-only di posisi futures (default seluruh contracts).
 
-  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dry-run] [--watch] [--interval=30]
+  node src/index.js strategy --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --amount=<n> [--amount-type=quote|base] [--timeframe=15m] [--fast=7] [--slow=25] [--trend=99] [--dip] [--dip-lookback=3] [--dry-run] [--watch] [--interval=30]
       MA cross strategy (long: MA7 cross up MA25 & price>MA99; short: MA7 cross down MA25 & price<MA99).
+      --dip: aktifkan dip_catcher (long saat harga pullback ke MA slow lalu reclaim, selama di atas MA trend).
 
 Examples:
   node src/index.js order --profile=binance1 --market=spot --symbol=BTCUSDT --action=long --amount=100
@@ -78,7 +82,8 @@ async function main() {
         action: args.action,
         amount: args.amount,
         amountType: args['amount-type'],
-        price: args.price
+        price: args.price,
+        stopPrice: args['stop-price']
       });
       console.log(JSON.stringify(result, null, 2));
       break;
@@ -96,6 +101,8 @@ async function main() {
         slow: args.slow ? Number(args.slow) : undefined,
         trend: args.trend ? Number(args.trend) : undefined,
         interval: args.interval ? Number(args.interval) : undefined,
+        dip: args.dip === true || args.dip === 'true',
+        dipLookback: args['dip-lookback'] ? Number(args['dip-lookback']) : undefined,
         dryRun: args['dry-run'] === true || args['dry-run'] === 'true'
       };
 
@@ -114,6 +121,6 @@ async function main() {
 }
 
 main().catch(error => {
-  logger.error(error.message || String(error));
+  logger.error(describeError(error));
   process.exit(1);
 });

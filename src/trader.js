@@ -13,8 +13,12 @@ function normalizeAction(action) {
     case 'close':
     case 'exit':
       return 'close';
+    case 'stop':
+    case 'stop_loss':
+    case 'stoploss':
+      return 'stop';
     default:
-      throw new Error(`Unsupported action "${action}". Use long, short or close.`);
+      throw new Error(`Unsupported action "${action}". Use long, short, close or stop.`);
   }
 }
 
@@ -107,6 +111,30 @@ async function futuresClose(exchange, symbol) {
   return placeOrder(exchange, symbol, side, amount, undefined, { reduceOnly: true });
 }
 
+async function futuresStop(exchange, symbol, amount, stopPrice) {
+  const trigger = Number(stopPrice);
+  if (!trigger || trigger <= 0) {
+    throw new Error('stopPrice is required for stop orders');
+  }
+
+  const positions = await exchange.fetchPositions([symbol]);
+  const position = positions.find(entry => entry.symbol === symbol && entry.contracts && Math.abs(entry.contracts) > 0);
+
+  if (!position) {
+    throw new Error(`No open position for ${symbol}`);
+  }
+
+  const side = position.side === 'long' ? 'sell' : 'buy';
+  const contracts = amount
+    ? parseFloat(exchange.amountToPrecision(symbol, Math.abs(Number(amount))))
+    : Math.abs(position.contracts);
+
+  return exchange.createOrder(symbol, 'market', side, contracts, undefined, {
+    stopPrice: trigger,
+    reduceOnly: true
+  });
+}
+
 async function futuresOpen(exchange, profile, symbol, side, amount, amountType) {
   if (profile.leverage) {
     try {
@@ -148,6 +176,11 @@ export async function executeAction(request) {
 
   if (action === 'close') {
     order = market === 'future' ? await futuresClose(exchange, symbol) : await spotClose(exchange, symbol);
+  } else if (action === 'stop') {
+    if (market !== 'future') {
+      throw new Error('Stop orders are only supported for futures');
+    }
+    order = await futuresStop(exchange, symbol, request.amount, request.stopPrice);
   } else if (market === 'future') {
     const side = action === 'long' ? 'buy' : 'sell';
     order = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType);
