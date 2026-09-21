@@ -14,7 +14,8 @@ const CODE_HINTS = {
   '-4164': 'Order ditolak: posisi perlu reduceOnly atau terjadi konflik.',
   '-4131': 'Order ditolak karena melanggar batas posisi/strategi.',
   '-1013': 'Filter exchange tidak terpenuhi (minNotional/minQty).',
-  '-4046': 'Tidak ada posisi terbuka untuk di-close/stop.'
+  '-4046': 'Tidak ada posisi terbuka untuk di-close/stop.',
+  '-4061': 'Position side tidak cocok dengan setting akun (Hedge/One-way). Bot mencoba menyesuaikan otomatis; jika masih gagal, set "hedgeMode" (true/false) di profile config.json atau ubah Position Mode di Binance.'
 };
 
 const NETWORK_RE = /fetch failed|Connect Timeout|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|socket hang up|timed? ?out|network/i;

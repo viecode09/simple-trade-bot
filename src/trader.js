@@ -106,7 +106,34 @@ async function spotClose(exchange, symbol) {
   return placeOrder(exchange, symbol, 'sell', amount);
 }
 
-async function futuresClose(exchange, symbol) {
+const hedgeModeCache = new WeakMap();
+
+async function isHedgeMode(exchange, symbol, profile) {
+  if (profile && typeof profile.hedgeMode === 'boolean') {
+    return profile.hedgeMode;
+  }
+  if (typeof exchange.fetchPositionMode !== 'function') {
+    return false;
+  }
+  if (hedgeModeCache.has(exchange)) {
+    return hedgeModeCache.get(exchange);
+  }
+  try {
+    const mode = await exchange.fetchPositionMode(symbol);
+    const hedged = Boolean(mode && mode.hedged);
+    hedgeModeCache.set(exchange, hedged);
+    return hedged;
+  } catch {
+    hedgeModeCache.set(exchange, false);
+    return false;
+  }
+}
+
+function sideParam(hedged, positionSide) {
+  return hedged ? { positionSide: positionSide === 'long' ? 'LONG' : 'SHORT' } : {};
+}
+
+async function futuresClose(exchange, symbol, profile) {
   const positions = await exchange.fetchPositions([symbol]);
   const position = positions.find(entry => entry.symbol === symbol && entry.contracts && Math.abs(entry.contracts) > 0);
 
@@ -116,11 +143,13 @@ async function futuresClose(exchange, symbol) {
 
   const side = position.side === 'long' ? 'sell' : 'buy';
   const amount = Math.abs(position.contracts);
+  const hedged = await isHedgeMode(exchange, symbol, profile);
 
-  return placeOrder(exchange, symbol, side, amount, undefined, { reduceOnly: true });
+  const params = hedged ? sideParam(true, position.side) : { reduceOnly: true };
+  return placeOrder(exchange, symbol, side, amount, undefined, params);
 }
 
-async function futuresStop(exchange, symbol, amount, stopPrice) {
+async function futuresStop(exchange, symbol, amount, stopPrice, profile) {
   const trigger = Number(stopPrice);
   if (!trigger || trigger <= 0) {
     throw new Error('stopPrice is required for stop orders');
@@ -137,11 +166,13 @@ async function futuresStop(exchange, symbol, amount, stopPrice) {
   const contracts = amount
     ? parseFloat(exchange.amountToPrecision(symbol, Math.abs(Number(amount))))
     : Math.abs(position.contracts);
+  const hedged = await isHedgeMode(exchange, symbol, profile);
 
-  return exchange.createOrder(symbol, 'market', side, contracts, undefined, {
-    stopPrice: trigger,
-    reduceOnly: true
-  });
+  const params = hedged
+    ? { stopPrice: trigger, ...sideParam(true, position.side) }
+    : { stopPrice: trigger, reduceOnly: true };
+
+  return exchange.createOrder(symbol, 'market', side, contracts, undefined, params);
 }
 
 async function futuresOpen(exchange, profile, symbol, side, amount, amountType) {
@@ -162,7 +193,9 @@ async function futuresOpen(exchange, profile, symbol, side, amount, amountType) 
   }
 
   const base = await toBaseAmount(exchange, symbol, amount, amountType ?? 'quote');
-  return placeOrder(exchange, symbol, side, base);
+  const hedged = await isHedgeMode(exchange, symbol, profile);
+  const params = hedged ? sideParam(true, side === 'buy' ? 'long' : 'short') : {};
+  return placeOrder(exchange, symbol, side, base, undefined, params);
 }
 
 export async function executeAction(request) {
@@ -184,12 +217,12 @@ export async function executeAction(request) {
   let order;
 
   if (action === 'close') {
-    order = market === 'future' ? await futuresClose(exchange, symbol) : await spotClose(exchange, symbol);
+    order = market === 'future' ? await futuresClose(exchange, symbol, profile) : await spotClose(exchange, symbol);
   } else if (action === 'stop') {
     if (market !== 'future') {
       throw new Error('Stop orders are only supported for futures');
     }
-    order = await futuresStop(exchange, symbol, request.amount, request.stopPrice);
+    order = await futuresStop(exchange, symbol, request.amount, request.stopPrice, profile);
   } else if (market === 'future') {
     const side = action === 'long' ? 'buy' : 'sell';
     order = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType);

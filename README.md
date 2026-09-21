@@ -140,7 +140,7 @@ Opsi: `--fast=7`, `--slow=25`, `--trend=99`, `--amount-type=quote|base`, `--dip`
 - `webhook.secret` — secret validasi (bisa `env:NAMA_ENV`).
 - `webhook.ipAllowlist` — opsional; batasi IP pengirim. Kosong = semua diizinkan.
 - `defaultProfile` — profile default bila payload tidak menyebut `profile`.
-- `profiles[]` — `id`, `exchange` (id CCXT), `apiKey`/`secret` (bisa `env:...`), `leverage`, `marginMode`, `allowSpot`, `allowFutures`.
+- `profiles[]` — `id`, `exchange` (id CCXT), `apiKey`/`secret` (bisa `env:...`), `leverage`, `marginMode`, `allowSpot`, `allowFutures`, dan `hedgeMode` (opsional: `true`/`false` untuk memaksa mode posisi; jika dibiarkan kosong bot mendeteksi otomatis).
 - `symbolMap` — pemetaan ticker TradingView ke simbol CCXT spot & futures.
 
 Nilai yang diawali `env:` akan dibaca dari environment variable, jadi API key tidak perlu ditulis di file.
@@ -216,6 +216,7 @@ Bot mengubah error exchange menjadi pesan yang mudah dibaca (baik di log, respon
 | `-2015` Invalid API-key, IP, or permissions | Key salah / IP tidak diizinkan / Futures belum aktif | Cek API Management Binance: aktifkan izin yang diperlukan, cocokkan IP whitelist (atau kosongkan) |
 | `-1022` Signature invalid | Secret key salah atau jam tidak sinkron | Periksa `BINANCE_SECRET` dan sinkronkan waktu |
 | `-2022` / `-4164` ReduceOnly rejected | Tidak ada posisi, atau arah order salah | Pastikan ada posisi terbuka sebelum `close`/`stop` |
+| `-4061` Position side mismatch | Akun Binance memakai Hedge Mode sedangkan order one-way (atau sebaliknya) | Bot mendeteksi otomatis (`fetchPositionMode`) dan mengirim `positionSide` bila perlu. Bisa dipaksa lewat `hedgeMode` di profile, atau ubah Position Mode di Binance |
 | `Tidak dapat menjangkau exchange` | Jaringan/DNS/VPN memblokir Binance | Gunakan VPN atau VPS di luar Indonesia; pastikan DNS normal |
 
 Melihat error terbaru: `journalctl -u simple-trade-bot -n 50` atau file `logs/bot.log`.
