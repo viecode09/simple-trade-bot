@@ -995,7 +995,7 @@ async function loadOrders() {
   } catch (e) {
     tbody.innerHTML = '';
     $('ordEmpty').classList.remove('hidden');
-    $('posMsg').textContent = '';
+    $('posMsg').textContent = e.message;
   }
 }
 

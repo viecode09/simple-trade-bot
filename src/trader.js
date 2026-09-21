@@ -340,7 +340,7 @@ export async function getOpenOrders(profileId) {
     throw new Error(`Exchange "${profile.exchange}" does not support fetchOpenOrders`);
   }
 
-  const orders = await exchange.fetchOpenOrders();
+  const orders = await exchange.fetchOpenOrders(undefined, undefined, undefined, { type: 'future' });
   return orders.map(order => ({
     id: order.id,
     symbol: order.symbol,

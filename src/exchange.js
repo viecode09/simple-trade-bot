@@ -50,6 +50,7 @@ export function getExchange(profile, market, { public: isPublic = false } = {}) 
     options: {
       defaultType: market === 'future' ? 'future' : 'spot',
       fetchMarkets: { types: market === 'future' ? ['linear'] : ['spot'] },
+      fetchOpenOrders: { warnWithoutSymbol: false },
       adjustForTimeDifference: true,
       recvWindow: 60000
     }
