@@ -185,6 +185,7 @@
   .tab { background: transparent; border: 1px solid transparent; color: var(--muted); padding: 7px 14px; border-radius: 8px; font-size: 12px; }
   .tab:hover { color: var(--text); }
   .tab.active { background: var(--panel-2); border-color: var(--border); color: var(--text); }
+  .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
   th { color: var(--muted); font-weight: 500; }
@@ -235,6 +236,9 @@
     .main { padding: 12px 12px 32px; }
     .pair-metrics { margin-left: 0; }
     #chart { min-height: 300px; }
+    .positions .p-head { flex-wrap: wrap; gap: 8px; }
+    th, td { padding: 8px 10px; font-size: 11px; }
+    .pair-head .price { font-size: 16px; }
     .balance .cell { padding: 10px 12px; }
     .balance .cell .v { font-size: 15px; margin-top: 3px; }
     .balance .cell .k { font-size: 9px; }
@@ -387,17 +391,21 @@
         <span id="posMsg" class="muted" style="font-size:11px; margin-left:auto"></span>
       </div>
       <div id="tabPositions">
-        <table>
-          <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>Liq. Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
-          <tbody id="posRows"></tbody>
-        </table>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>Liq. Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
+            <tbody id="posRows"></tbody>
+          </table>
+        </div>
         <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
       </div>
       <div id="tabOrders" class="hidden">
-        <table>
-          <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody id="ordRows"></tbody>
-        </table>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="ordRows"></tbody>
+          </table>
+        </div>
         <div id="ordEmpty" class="empty-state hidden"><div class="big">Belum ada open order</div><div>Order terbuka (limit/TP/SL) akan muncul di sini.</div></div>
       </div>
     </section>
