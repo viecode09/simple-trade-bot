@@ -12,6 +12,9 @@ import { listPairs, addPair, removePair, previewPair } from './watchlist.js';
 const MAX_BODY_BYTES = 64 * 1024;
 
 const DASHBOARD_HTML = fs.readFileSync(new URL('./dashboard.html', import.meta.url), 'utf8');
+const MANIFEST = fs.readFileSync(new URL('./manifest.webmanifest', import.meta.url), 'utf8');
+const SERVICE_WORKER = fs.readFileSync(new URL('./sw.js', import.meta.url), 'utf8');
+const ICONS = new Set(['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']);
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -163,7 +166,8 @@ export function startWebhookServer() {
         return;
       }
 
-      const basicExempt = path === '/health' || path === '/webhook';
+      const basicExempt = path === '/health' || path === '/webhook' ||
+        path === '/manifest.webmanifest' || path === '/sw.js' || path.startsWith('/icons/');
       if (!basicExempt && !basicAuthValid(config, req)) {
         res.writeHead(401, {
           'WWW-Authenticate': 'Basic realm="simple-trade-bot", charset="UTF-8"',
@@ -180,6 +184,33 @@ export function startWebhookServer() {
 
       if (req.method === 'GET' && path === '/health') {
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/manifest.webmanifest') {
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+        res.end(MANIFEST);
+        return;
+      }
+
+      if (req.method === 'GET' && path === '/sw.js') {
+        res.writeHead(200, {
+          'Content-Type': 'application/javascript; charset=utf-8',
+          'Service-Worker-Allowed': '/'
+        });
+        res.end(SERVICE_WORKER);
+        return;
+      }
+
+      if (req.method === 'GET' && path.startsWith('/icons/')) {
+        const name = path.slice('/icons/'.length);
+        if (!ICONS.has(name)) {
+          sendJson(res, 404, { ok: false, error: 'not found' });
+          return;
+        }
+        const icon = fs.readFileSync(new URL(`./icons/${name}`, import.meta.url));
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+        res.end(icon);
         return;
       }
 

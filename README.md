@@ -35,6 +35,8 @@ Endpoint:
 
 Buka `http://localhost:8787/dashboard` (atau `/`). Jika `server.auth` diisi, browser meminta **login HTTP Basic** dulu. Lalu isi **Webhook secret** (ikon Settings, atau modal setup saat pertama kali) — harus sama dengan `WEBHOOK_SECRET`.
 
+**PWA**: dashboard sudah bisa di-*install* ke home screen Android/iOS (manifest, service worker, ikon). Buka di Chrome/Edge → menu → *Install app / Add to Home screen* (Safari iOS: *Share → Add to Home Screen*). Untuk install di luar `localhost` diperlukan **HTTPS**. Aset: `/manifest.webmanifest`, `/sw.js`, `/icons/*` (dikecualikan dari Basic auth).
+
 Layout trading terminal (dark, minimalis):
 - **Header** — logo, status bot (Running/Stopped), toggle Spot/Futures, Settings, avatar profile.
 - **Sidebar Favorites** (kiri) — daftar pair favorit + harga & perubahan 24 jam, pencarian, tombol **+ Add Favorite**, dan bintang untuk menghapus dari watchlist. Klik pair → seluruh dashboard mengikuti.
@@ -206,7 +208,7 @@ Catatan:
 
 ## Keamanan
 
-- **HTTP Basic Auth**: set `server.auth` (`username`/`password`) untuk melindungi dashboard (`/`, `/dashboard`) dan semua endpoint `/api/*`. Browser akan meminta login; `/health` dan `/webhook` dikecualikan (`/webhook` tetap divalidasi `webhook.secret` agar TradingView tetap bisa kirim alert).
+- **HTTP Basic Auth**: set `server.auth` (`username`/`password`) untuk melindungi dashboard (`/`, `/dashboard`) dan semua endpoint `/api/*`. Browser akan meminta login; `/health`, `/webhook`, serta aset PWA (`/manifest.webmanifest`, `/sw.js`, `/icons/*`) dikecualikan (`/webhook` tetap divalidasi `webhook.secret` agar TradingView tetap bisa kirim alert).
 - Selalu set `webhook.secret`.
 - Webhook default listen di `0.0.0.0`; batasi `server.host` atau gunakan reverse proxy + HTTPS.
 - API key sebaiknya hanya izinkan trading, **tanpa** izin withdraw.
