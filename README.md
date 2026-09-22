@@ -206,6 +206,44 @@ Catatan:
 - Jalankan strategi MA `--watch` sebagai service terpisah: salin unit, ganti `ExecStart` menjadi `... src/index.js strategy --profile=binance1 --market=future --symbol=BTCUSDT --amount=50 --watch`, dan ubah `Description`.
 - Server webhook (port 8787) sebaiknya hanya diakses lewat reverse proxy (Nginx) + HTTPS, bukan dibuka langsung ke publik.
 
+## Nginx + HTTPS (Ubuntu)
+
+Reverse proxy domain `binbot.qatros.com` → app di `127.0.0.1:8787`, dengan HTTPS (Let's Encrypt) sekaligus memenuhi syarat PWA.
+
+**1. DNS**: buat **A record** `binbot.qatros.com` → IP publik VPS.
+
+**2. Install Nginx & Certbot:**
+```bash
+sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+**3. Pasang config** (ada di repo `deploy/nginx/binbot.qatros.com.conf`):
+```bash
+sudo cp deploy/nginx/binbot.qatros.com.conf /etc/nginx/sites-available/binbot.qatros.com
+sudo ln -sf /etc/nginx/sites-available/binbot.qatros.com /etc/nginx/sites-enabled/binbot.qatros.com
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**4. Aktifkan HTTPS:**
+```bash
+sudo certbot --nginx -d binbot.qatros.com
+```
+Certbot menambahkan server block 443 + redirect HTTP→HTTPS otomatis (location SSE tetap dipertahankan). Renewal otomatis via systemd timer.
+
+**5. Amankan app agar hanya lewat Nginx** — di `config.json` set `"server": { "host": "127.0.0.1", "port": 8787, ... }` lalu `sudo systemctl restart simple-trade-bot`.
+
+**6. Firewall:**
+```bash
+sudo ufw allow 'Nginx Full' && sudo ufw enable
+```
+
+Webhook TradingView & dashboard:
+- Dashboard: `https://binbot.qatros.com/dashboard` (login HTTP Basic + webhook secret).
+- Webhook: `https://binbot.qatros.com/webhook`.
+
+Catatan: config sudah menonaktifkan buffering pada `/api/stream` agar **SSE** (saldo/posisi live) tidak macet. Untuk HTTP/2 tambahkan `http2 on;` di server block 443 (Nginx ≥ 1.25.1) atau ubah `listen 443 ssl;` menjadi `listen 443 ssl http2;` pada versi lama.
+
 ## Keamanan
 
 - **HTTP Basic Auth**: set `server.auth` (`username`/`password`) untuk melindungi dashboard (`/`, `/dashboard`) dan semua endpoint `/api/*`. Browser akan meminta login; `/health`, `/webhook`, serta aset PWA (`/manifest.webmanifest`, `/sw.js`, `/icons/*`) dikecualikan (`/webhook` tetap divalidasi `webhook.secret` agar TradingView tetap bisa kirim alert).
