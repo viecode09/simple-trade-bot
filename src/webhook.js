@@ -468,7 +468,8 @@ export function startWebhookServer() {
           price: payload.price,
           stopPrice: payload.stopPrice ?? payload.stop_price ?? payload.triggerPrice,
           takeProfit: payload.takeProfit ?? payload.take_profit ?? payload.tp,
-          stopLoss: payload.stopLoss ?? payload.stop_loss ?? payload.sl
+          stopLoss: payload.stopLoss ?? payload.stop_loss ?? payload.sl,
+          marginMode: payload.marginMode ?? payload.margin_mode
         });
 
         sendJson(res, 200, { ok: true, ...result });

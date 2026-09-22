@@ -175,7 +175,7 @@ async function futuresStop(exchange, symbol, amount, stopPrice, profile) {
   return exchange.createOrder(symbol, 'market', side, contracts, undefined, params);
 }
 
-async function futuresOpen(exchange, profile, symbol, side, amount, amountType) {
+async function futuresOpen(exchange, profile, symbol, side, amount, amountType, marginMode) {
   if (profile.leverage) {
     try {
       await exchange.setLeverage(profile.leverage, symbol);
@@ -184,11 +184,12 @@ async function futuresOpen(exchange, profile, symbol, side, amount, amountType) 
     }
   }
 
-  if (profile.marginMode) {
+  const mode = marginMode || profile.marginMode;
+  if (mode) {
     try {
-      await exchange.setMarginMode(profile.marginMode, symbol);
+      await exchange.setMarginMode(mode, symbol);
     } catch (e) {
-      logger.warn(`Could not set margin mode ${profile.marginMode} for ${symbol}: ${e.message || e}`);
+      logger.warn(`Could not set margin mode ${mode} for ${symbol}: ${e.message || e}`);
     }
   }
 
@@ -268,7 +269,7 @@ export async function executeAction(request) {
     order = await futuresStop(exchange, symbol, request.amount, request.stopPrice, profile);
   } else if (market === 'future') {
     const side = action === 'long' ? 'buy' : 'sell';
-    const placed = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType);
+    const placed = await futuresOpen(exchange, profile, symbol, side, request.amount, request.amountType, request.marginMode);
     order = placed.order;
     protection = await placeProtection(exchange, profile, symbol, action, placed.amount, request.takeProfit, request.stopLoss);
   } else {

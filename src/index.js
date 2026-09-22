@@ -33,7 +33,7 @@ Usage:
   node src/index.js positions <profileId>
       Show open futures positions.
 
-  node src/index.js order --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --action=<long|short|close> --amount=<n> [--amount-type=quote|base] [--price=<n>] [--take-profit=<n>] [--stop-loss=<n>]
+  node src/index.js order --profile=<id> --market=<spot|future> --symbol=<SYMBOL> --action=<long|short|close> --amount=<n> [--amount-type=quote|base] [--price=<n>] [--take-profit=<n>] [--stop-loss=<n>] [--margin-mode=cross|isolated]
   node src/index.js order --profile=<id> --market=future --symbol=<SYMBOL> --action=stop --stop-price=<n> [--amount=<n>]
       Stop market reduce-only di posisi futures (default seluruh contracts).
       Untuk long/short futures, --take-profit/--stop-loss otomatis memasang order TP/SL reduce-only.
@@ -88,7 +88,8 @@ async function main() {
         price: args.price,
         stopPrice: args['stop-price'],
         takeProfit: args['take-profit'],
-        stopLoss: args['stop-loss']
+        stopLoss: args['stop-loss'],
+        marginMode: args['margin-mode']
       });
       console.log(JSON.stringify(result, null, 2));
       break;

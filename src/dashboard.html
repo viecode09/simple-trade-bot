@@ -159,15 +159,16 @@
   .side-col { display: flex; flex-direction: column; gap: 16px; }
   .panel { padding: 16px; }
   .panel h3 { margin: 0 0 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  .rec-signal { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-  .signal-badge { font-size: 22px; font-weight: 800; letter-spacing: 1px; padding: 6px 18px; border-radius: 8px; }
-  .signal-badge.BUY { background: rgba(14,203,129,.12); color: var(--green); }
-  .signal-badge.SELL { background: rgba(246,70,93,.12); color: var(--red); }
-  .signal-badge.HOLD { background: var(--panel-2); color: var(--muted); }
-  .conf { flex: 1; }
-  .conf .k { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; }
-  .conf .bar { height: 6px; background: var(--panel-2); border-radius: 4px; margin-top: 6px; overflow: hidden; }
-  .conf .bar > i { display: block; height: 100%; background: var(--yellow); }
+  .sub-h { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; margin: 12px 0 6px; }
+  .sub-h:not(:first-of-type) { border-top: 1px solid var(--border); padding-top: 10px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .detail-grid .sub-h { margin-top: 0; }
+  @media (max-width: 700px) { .detail-grid { grid-template-columns: 1fr; } }
+  .bs-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .bs-track { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+  .bs-track i { display: block; height: 100%; transition: width .25s ease; }
+  .bs-track .buy { background: var(--green); }
+  .bs-track .sell { background: var(--red); }
   .kv { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
   .kv:last-of-type { border-bottom: 0; }
   .kv .k { color: var(--muted); }
@@ -200,6 +201,15 @@
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 50; }
   .overlay.hidden { display: none; }
   .modal { width: 420px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .modal.wide { width: 820px; }
+  .gauge { position: relative; height: 10px; border-radius: 6px; background: linear-gradient(90deg, var(--red), #4b5158, var(--green)); margin: 4px 0 2px; }
+  .gauge i { position: absolute; top: -3px; width: 4px; height: 16px; background: #fff; border-radius: 2px; transform: translateX(-2px); box-shadow: 0 0 4px rgba(0,0,0,.5); }
+  .meter-row { margin: 10px 0; }
+  .meter-row .lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .levels { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .chip { padding: 5px 9px; border-radius: 6px; background: var(--panel-2); font-size: 11px; border: 1px solid var(--border); }
+  .chip.up { color: var(--green); border-color: rgba(14,203,129,.5); }
+  .chip.down { color: var(--red); border-color: rgba(246,70,93,.5); }
   .modal .m-head { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
   .modal .m-head h3 { margin: 0; flex: 1; font-size: 14px; }
   .modal .m-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -333,13 +343,12 @@
       <div class="side-col">
         <div class="card panel rec">
           <h3>Bot Recommendation</h3>
-          <div class="rec-signal">
-            <span class="signal-badge HOLD" id="recSignal">HOLD</span>
-            <div class="conf">
-              <div class="k"><span>Confidence</span><span id="recConfText">-</span></div>
-              <div class="bar"><i id="recConfBar" style="width:0%"></i></div>
-            </div>
+          <div class="bs-head">
+            <span class="up">BUY <b id="buyPct">-</b></span>
+            <span class="down"><b id="sellPct">-</b> SELL</span>
           </div>
+          <div class="bs-track"><i id="buyBar" class="buy"></i><i id="sellBar" class="sell"></i></div>
+          <div class="muted" style="font-size:11px; margin:8px 0 12px">Signal: <b id="recSignal">-</b></div>
           <div class="kv"><span class="k">Entry Range</span><span class="v" id="recEntry">-</span></div>
           <div class="kv"><span class="k">Take Profit</span><span class="v up" id="recTp">-</span></div>
           <div class="kv"><span class="k">Stop Loss</span><span class="v down" id="recSl">-</span></div>
@@ -361,7 +370,10 @@
             <div class="field"><label>Amount</label><input id="moAmount" type="number" step="any" placeholder="50"></div>
             <div class="field"><label>Amount Type</label><select id="moAmountType"><option value="quote">Quote (USDT)</option><option value="base">Base</option></select></div>
           </div>
-          <div class="field"><label>Price entry (opsional)</label><input id="moPrice" type="number" step="any" placeholder="Market / limit"></div>
+          <div class="grid2">
+            <div class="field"><label>Margin (Futures)</label><select id="moMargin"><option value="isolated">Isolated</option><option value="cross">Cross</option></select></div>
+            <div class="field"><label>Price entry (opsional)</label><input id="moPrice" type="number" step="any" placeholder="Market / limit"></div>
+          </div>
           <div class="grid2">
             <div class="field"><label>Take Profit (USDT)</label><input id="moTp" type="number" step="any" placeholder="mis. 10"></div>
             <div class="field"><label>Stop Loss (USDT)</label><input id="moSl" type="number" step="any" placeholder="mis. 5"></div>
@@ -369,17 +381,12 @@
           <div id="moPreview" class="ai-box" style="font-size:11px; margin-top:10px">Isi Amount + target Profit/Loss untuk melihat potensi PnL.</div>
           <button class="btn block" id="moBtn" style="margin-top:14px">Place Order</button>
         </div>
-
-        <div class="card panel analysis">
-          <h3>Market Analysis</h3>
-          <div class="kv"><span class="k">Trend</span><span class="v badge" id="anTrend">-</span></div>
-          <div class="kv"><span class="k">Volume</span><span class="v" id="anVolume">-</span></div>
-          <div class="kv"><span class="k">Momentum</span><span class="v" id="anMomentum">-</span></div>
-          <div class="kv"><span class="k">RSI (14)</span><span class="v" id="anRsi">-</span></div>
-          <div class="ai-box" id="anSummary">Belum ada analisa. Pilih pair dan muat data.</div>
-          <button class="btn block" id="detailBtn">View Detail Analysis</button>
-        </div>
       </div>
+    </section>
+
+    <section class="card panel analysis-inline">
+      <h3>Market Analysis</h3>
+      <div id="marketAnalysis" class="detail-grid"></div>
     </section>
 
     <section class="card positions">
@@ -428,9 +435,15 @@ const state = {
   favorites: [],
   custom: new Set(),
   leverage: null,
+  marginMode: null,
   lastPrice: null,
   positions: [],
   tab: 'positions',
+  lastInd: null,
+  lastAnalysis: null,
+  lastTrends: null,
+  lastSymbol: null,
+  lastTimeframe: null,
   chart: null,
   series: {},
   poll: null,
@@ -603,10 +616,16 @@ function closeSidebar() {
 }
 function syncLeverage() {
   const el = $('moLeverage');
-  if (!el) return;
-  el.disabled = state.market !== 'future';
-  if (state.leverage != null) el.value = state.leverage;
-  el.placeholder = state.market === 'future' ? (state.leverage ? state.leverage + 'x' : '5x') : 'Spot';
+  if (el) {
+    el.disabled = state.market !== 'future';
+    if (state.leverage != null) el.value = state.leverage;
+    el.placeholder = state.market === 'future' ? (state.leverage ? state.leverage + 'x' : '5x') : 'Spot';
+  }
+  const mm = $('moMargin');
+  if (mm) {
+    mm.disabled = state.market !== 'future';
+    if (state.marginMode) mm.value = state.marginMode;
+  }
   renderManualPreview();
 }
 
@@ -713,13 +732,21 @@ async function loadPair() {
   if (chartData && chartData.candles) {
     renderChart(chartData);
     const ind = computeIndicators(chartData.candles);
+    state.lastInd = ind;
+    state.lastAnalysis = chartData.analysis;
+    state.lastTrends = trends;
+    state.lastSymbol = chartData.symbol;
+    state.lastTimeframe = chartData.timeframe;
     renderRecommendation(ind, chartData.analysis, trends);
-    renderAnalysis(ind, chartData.analysis, trends);
+    renderMarketAnalysis();
     $('chartMsg').textContent = chartData.symbol + ' · ' + chartData.timeframe + (state.rsi ? ' · RSI' : '');
   } else {
     $('chartMsg').textContent = (chartData && chartData.error) ? 'data tidak tersedia' : '';
+    state.lastInd = null;
+    state.lastAnalysis = null;
+    state.lastTrends = null;
     renderRecommendation(null, null, null);
-    renderAnalysis(null, null, null);
+    renderMarketAnalysis();
   }
   loadPositions();
   loadBalance();
@@ -782,10 +809,11 @@ function renderChart(data) {
 function renderRecommendation(ind, analysis, trends) {
   const rec = buildRecommendation(ind, analysis, trends);
   state.lastRec = rec;
-  $('recSignal').className = 'signal-badge ' + rec.signal;
-  $('recSignal').textContent = rec.signal;
-  $('recConfText').textContent = rec.confidence + '%';
-  $('recConfBar').style.width = rec.confidence + '%';
+  $('buyPct').textContent = rec.buyPct + '%';
+  $('sellPct').textContent = rec.sellPct + '%';
+  $('buyBar').style.width = rec.buyPct + '%';
+  $('sellBar').style.width = rec.sellPct + '%';
+  $('recSignal').textContent = rec.signal + ' · ' + rec.confidence + '%';
   $('recEntry').textContent = rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-';
   $('recTp').textContent = rec.tp != null ? fmtPrice(rec.tp) : '-';
   $('recSl').textContent = rec.sl != null ? fmtPrice(rec.sl) : '-';
@@ -793,69 +821,153 @@ function renderRecommendation(ind, analysis, trends) {
 }
 
 function buildRecommendation(ind, analysis, trends) {
-  if (!ind || !analysis) return { signal: 'HOLD', confidence: 0, entryLow: null, entryHigh: null, tp: null, sl: null, rr: null };
-  const price = ind.last;
-  const bullish = analysis.signal === 'long' || (trends && trends.overallTrend === 'Bullish');
-  const bearish = analysis.signal === 'short' || (trends && trends.overallTrend === 'Bearish');
-  let signal = 'HOLD';
-  if (bullish && !bearish) signal = 'BUY';
-  else if (bearish && !bullish) signal = 'SELL';
+  if (!ind || !analysis) return { signal: 'HOLD', confidence: 0, buyPct: 50, sellPct: 50, entryLow: null, entryHigh: null, tp: null, sl: null, rr: null };
 
-  let score = 0, total = 0;
-  if (trends && trends.rows) {
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let score = 0;
+
+  // Multi-timeframe trend (bobot terbesar)
+  if (trends && trends.rows && trends.rows.length) {
+    let bull = 0, bear = 0, total = 0;
     for (const row of trends.rows) {
       if (!row.trend) continue;
       total += 1;
-      if (row.trend.startsWith('Bullish')) score += 1;
-      else if (row.trend.startsWith('Bearish')) score -= 1;
+      if (row.trend.startsWith('Bullish')) bull += 1;
+      else if (row.trend.startsWith('Bearish')) bear += 1;
     }
+    if (total) score += ((bull - bear) / total) * 50;
   }
-  let confidence = total ? Math.round(Math.abs(score) / total * 100) : 40;
-  if (analysis.crossUp || analysis.crossDown) confidence = Math.min(95, confidence + 15);
-  if (signal === 'HOLD') confidence = Math.max(25, Math.min(55, confidence));
 
+  // Sinyal strategi (MA/dip/RSI)
+  if (analysis.signal === 'long') score += 25;
+  else if (analysis.signal === 'short') score -= 25;
+  if (analysis.crossUp) score += 10;
+  if (analysis.crossDown) score -= 10;
+  if (analysis.rsiLong) score += 8;
+  if (analysis.rsiShort) score -= 8;
+
+  // Momentum EMA20
+  if (Number.isFinite(ind.momentum)) score += clamp(ind.momentum * 3000, -15, 15);
+
+  // RSI relative
+  if (analysis.rsi != null) score += clamp((50 - analysis.rsi) * 0.4, -12, 12);
+
+  score = clamp(score, -100, 100);
+  const buyPct = Math.round(50 + score / 2);
+  const sellPct = 100 - buyPct;
+  const signal = buyPct >= sellPct ? 'BUY' : 'SELL';
+  const confidence = Math.max(buyPct, sellPct);
+
+  const price = ind.last;
   const atrVal = ind.atr || price * 0.01;
   const dir = signal === 'SELL' ? -1 : 1;
   const entryLow = price - atrVal * 0.25 * dir;
   const entryHigh = price + atrVal * 0.25 * dir;
-  let tp = null, sl = null, rr = null;
-  if (signal !== 'HOLD') {
-    tp = price + dir * atrVal * 2;
-    sl = price - dir * atrVal;
-    rr = 2;
-  }
-  return { signal, confidence, entryLow, entryHigh, tp, sl, rr };
+  const tp = price + dir * atrVal * 2;
+  const sl = price - dir * atrVal;
+  const rr = 2;
+
+  return { signal, confidence, buyPct, sellPct, entryLow, entryHigh, tp, sl, rr };
 }
 
-function renderAnalysis(ind, analysis, trends) {
+function renderMarketAnalysis() {
+  const box = $('marketAnalysis');
+  if (!box) return;
+  const ind = state.lastInd;
+  const analysis = state.lastAnalysis;
+  const trends = state.lastTrends;
+  const rec = state.lastRec || {};
+
   if (!ind || !analysis) {
-    $('anTrend').textContent = '-'; $('anVolume').textContent = '-';
-    $('anMomentum').textContent = '-'; $('anRsi').textContent = '-';
-    $('anSummary').textContent = 'Data belum tersedia. Pastikan koneksi exchange dan API key aktif.';
+    box.innerHTML = `
+      <div>
+        <div class="sub-h">Current Situation</div>
+        <div class="ai-box">Data belum tersedia. Pilih pair / muat chart.</div>
+      </div>
+      <div>
+        <div class="sub-h">Prediction</div>
+        <div class="ai-box">Belum ada prediksi.</div>
+      </div>`;
     return;
   }
+
   let trend = 'Sideways';
   if (trends && trends.overallTrend === 'Bullish') trend = 'Bullish';
   else if (trends && trends.overallTrend === 'Bearish') trend = 'Bearish';
   else if (analysis.signal === 'long') trend = 'Bullish';
   else if (analysis.signal === 'short') trend = 'Bearish';
-
   const trendCls = trend === 'Bullish' ? 'badge-bull' : trend === 'Bearish' ? 'badge-bear' : 'badge-side';
-  $('anTrend').className = 'v badge ' + trendCls;
-  $('anTrend').textContent = trend;
 
-  $('anVolume').textContent = ind.volTrend > 0.05 ? 'Increasing' : ind.volTrend < -0.05 ? 'Decreasing' : 'Flat';
-  $('anVolume').className = 'v ' + (ind.volTrend > 0.05 ? 'up' : ind.volTrend < -0.05 ? 'down' : 'muted');
+  const rows = trends && trends.rows ? trends.rows.map(r => r.error
+    ? `<tr><td>${r.timeframe}</td><td colspan="4" class="down">${r.error}</td></tr>`
+    : `<tr><td>${r.timeframe}</td><td>${r.trend}</td><td>${fmtPrice(r.price)}</td><td>${r.signal}</td><td>${r.recommendation}</td></tr>`).join('') : '';
 
-  const strong = Math.abs(ind.momentum) > 0.001;
-  $('anMomentum').textContent = ind.momentum > 0 ? (strong ? 'Strong Up' : 'Weak Up') : (strong ? 'Strong Down' : 'Weak Down');
-  $('anMomentum').className = 'v ' + (ind.momentum > 0 ? 'up' : 'down');
+  const rsi = analysis.rsi != null ? analysis.rsi : ind.rsi;
+  const rsiPct = rsi == null ? null : Math.max(0, Math.min(100, rsi));
+  const trendPct = rec.buyPct != null ? rec.buyPct : 50;
+  const mom = Number(ind.momentum) || 0;
+  const momPct = Math.max(2, Math.min(98, 50 + mom * 3000));
 
-  const r = analysis.rsi != null ? analysis.rsi : ind.rsi;
-  $('anRsi').textContent = r == null ? '-' : r.toFixed(1) + (r > 70 ? ' (Overbought)' : r < 30 ? ' (Oversold)' : '');
-  $('anRsi').className = 'v ' + (r == null ? 'muted' : r > 70 ? 'down' : r < 30 ? 'up' : '');
+  const levels = (rec.tp != null && rec.sl != null && rec.entryLow != null)
+    ? [
+      { label: 'SL', price: rec.sl, cls: 'down' },
+      { label: 'Entry', price: (rec.entryLow + rec.entryHigh) / 2, cls: '' },
+      { label: 'TP', price: rec.tp, cls: 'up' }
+    ].sort((a, b) => a.price - b.price)
+    : [];
+  const levelsHtml = levels.map(l => `<span class="chip ${l.cls}">${l.label} ${fmtPrice(l.price)}</span>`).join('<span class="muted">→</span>');
+  const signalCls = rec.signal === 'SELL' ? 'down' : 'up';
+  const hasPred = rec.signal && rec.tp != null;
+  const summary = buildSummary(ind, analysis, trends, trend);
+  const prediction = buildPrediction(rec, ind, analysis, trends, trend);
 
-  $('anSummary').textContent = buildSummary(ind, analysis, trends, trend);
+  const predHtml = hasPred ? `
+        <div class="kv"><span class="k">Outlook</span><span class="v ${signalCls}">${rec.signal} · ${rec.confidence}%</span></div>
+        <div class="meter-row">
+          <div class="lbl"><span class="up">BUY ${rec.buyPct}%</span><span class="down">SELL ${rec.sellPct}%</span></div>
+          <div class="bs-track"><i class="buy" style="width:${rec.buyPct}%"></i><i class="sell" style="width:${rec.sellPct}%"></i></div>
+        </div>
+        <div class="kv"><span class="k">Entry Range</span><span class="v">${fmtPrice(rec.entryLow)} - ${fmtPrice(rec.entryHigh)}</span></div>
+        <div class="kv"><span class="k">Target (TP)</span><span class="v up">${fmtPrice(rec.tp)}</span></div>
+        <div class="kv"><span class="k">Invalidation (SL)</span><span class="v down">${fmtPrice(rec.sl)}</span></div>
+        <div class="kv"><span class="k">Risk / Reward</span><span class="v">${rec.rr != null ? '1 : ' + rec.rr.toFixed(2) : '-'}</span></div>
+        ${levels.length ? `<div class="levels">${levelsHtml}</div>` : ''}
+        <div class="ai-box">${prediction}</div>`
+    : '<div class="ai-box">Prediction belum tersedia.</div>';
+
+  box.innerHTML = `
+    <div>
+      <div class="sub-h">Current Situation</div>
+      <div class="kv"><span class="k">Trend</span><span class="v badge ${trendCls}">${trend}</span></div>
+      <div class="meter-row">
+        <div class="lbl"><span class="down">Bearish</span><span class="muted">Trend Bias</span><span class="up">Bullish</span></div>
+        <div class="gauge"><i style="left:${trendPct}%"></i></div>
+      </div>
+      ${rows ? `<div class="table-scroll"><table><thead><tr><th>TF</th><th>Trend</th><th>Harga</th><th>Sinyal</th><th>Rekomendasi</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+      ${rsiPct != null ? `<div class="meter-row"><div class="lbl"><span class="muted">RSI ${rsi.toFixed(1)}</span><span class="muted">30 / 70</span></div><div class="gauge"><i style="left:${rsiPct}%"></i></div></div>` : ''}
+      <div class="meter-row">
+        <div class="lbl"><span class="down">Momentum −</span><span class="muted">${mom >= 0 ? '+' : ''}${(mom * 100).toFixed(2)}%</span><span class="up">+ Momentum</span></div>
+        <div class="gauge"><i style="left:${momPct}%"></i></div>
+      </div>
+      <div class="ai-box">${summary}</div>
+    </div>
+    <div>
+      <div class="sub-h">Prediction</div>
+      ${predHtml}
+    </div>`;
+}
+
+function buildPrediction(rec, ind, analysis, trends, trend) {
+  const sym = pairLabel(state.ticker);
+  const dir = rec.signal === 'SELL' ? -1 : 1;
+  const arah = rec.signal === 'SELL' ? 'turun' : 'naik';
+  const target = rec.tp != null ? fmtPrice(rec.tp) : '-';
+  const invalid = rec.sl != null ? fmtPrice(rec.sl) : '-';
+  const rr = rec.rr != null ? '1:' + rec.rr.toFixed(1) : '-';
+  const bias = trend === 'Bullish' ? 'skenario bullish' : trend === 'Bearish' ? 'skenario bearish' : 'skenario sideways';
+  const valid = rec.confidence >= 60 ? 'keyakinan cukup tinggi' : rec.confidence >= 52 ? 'keyakinan moderat' : 'keyakinan rendah (hati-hati)';
+  return `Prediksi ${sym}: harga diproyeksikan ${arah} menuju ${target} dengan R/R ${rr} (${valid}). ` +
+    `Skenario ini gugur bila harga menembus ${invalid}. Basis: ${bias} dan momentum ${ind.momentum > 0 ? 'positif' : 'negatif'}.`;
 }
 
 function buildSummary(ind, analysis, trends, trend) {
@@ -1042,7 +1154,8 @@ $('ordRows').addEventListener('click', async e => {
 });
 
 /* ---------- Modals ---------- */
-function openModal(html) {
+function openModal(html, opts = {}) {
+  $('modalBox').className = 'modal' + (opts.wide ? ' wide' : '');
   $('modalBox').innerHTML = html;
   $('modalRoot').classList.remove('hidden');
 }
@@ -1250,6 +1363,7 @@ async function executeManual() {
     price: $('moPrice').value ? Number($('moPrice').value) : undefined
   };
   if (action === 'stop' && pl.slPrice) body.stopPrice = Number(pl.slPrice);
+  if ($('moMarket').value === 'future') body.marginMode = $('moMargin').value;
   if (action === 'long' || action === 'short') {
     if (pl.tpPrice) body.takeProfit = Number(pl.tpPrice);
     if (pl.slPrice) body.stopLoss = Number(pl.slPrice);
@@ -1261,19 +1375,6 @@ $('modalRoot').addEventListener('click', async e => {
   if (e.target.id === 'tradeConfirm') { await executePending(); }
   else if (e.target.id === 'moConfirm') { await executeManual(); }
 });
-
-$('detailBtn').onclick = async () => {
-  openModal(`<div class="m-head"><h3>Detail Analysis</h3><button class="close-x" data-close>×</button></div><div class="m-body" id="detailBody">Memuat...</div>`);
-  try {
-    const data = await api('/api/trends?' + q({ profile: state.profile, market: state.market, symbol: state.ticker }));
-    const rows = (data.rows || []).map(r => r.error
-      ? `<tr><td>${r.timeframe}</td><td colspan="4" class="down">${r.error}</td></tr>`
-      : `<tr><td>${r.timeframe}</td><td>${r.trend}</td><td>${fmtPrice(r.price)}</td><td>${r.signal}</td><td>${r.recommendation}</td></tr>`).join('');
-    $('detailBody').innerHTML = `
-      <div class="kv"><span class="k">Overall</span><span class="v">${data.overallTrend} → ${data.overallRecommendation}</span></div>
-      <table><thead><tr><th>TF</th><th>Trend</th><th>Harga</th><th>Sinyal</th><th>Rekomendasi</th></tr></thead><tbody>${rows}</tbody></table>`;
-  } catch (e) { $('detailBody').innerHTML = '<div class="down">' + e.message + '</div>'; }
-};
 
 $('tradeBtn').onclick = () => { if (state.ticker) confirmTrade(state.lastRec && state.lastRec.signal === 'SELL' ? 'sell' : 'buy', pairLabel(state.ticker)); };
 
@@ -1373,6 +1474,7 @@ async function bootstrap() {
     $('avatar').textContent = (state.profile || 'B').charAt(0).toUpperCase();
     const cfg = (state.meta.profileSettings || {})[state.profile] || {};
     state.leverage = cfg.leverage ?? null;
+    state.marginMode = cfg.marginMode || 'isolated';
     syncLeverage();
     setStatus(true);
     await loadFavorites();
