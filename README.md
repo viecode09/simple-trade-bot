@@ -43,7 +43,7 @@ Layout trading terminal (dark, minimalis):
 - **Balance Summary** (lebar penuh) — Total Balance, Available Balance, Today's PnL (nilai & %).
 - **Open Positions** (lebar penuh, tepat di bawah Balance Summary, dengan tab **Positions** / **Open Orders**) — tab Positions: tabel posisi (Pair, Side, Entry, Mark, **Liq. Price**, PnL, **Risk**, **Recommendation**, aksi View/Close). Tab Open Orders: semua order terbuka (Pair, Type, Side, Trigger/Price, Amount, Filled, Status, aksi **Cancel** untuk membatalkan order di Binance). Risk dihitung dari jarak harga mark ke liquidation (atau leverage), Recommendation dari ROE/PnL + level risk.
 - **Trading Workspace** — kolom kiri **Chart** (65–70%): header pair (harga, 24h change, high/low, volume, star), pemilih timeframe (5m/15m/1H/4H/1D) + toggle **RSI**, candlestick + **EMA20/EMA50** + histogram volume + garis harga terakhir + marker sinyal (MA/dip/RSI). Kolom kanan **Bot Recommendation** (bar **BUY vs SELL** dengan Confidence % yang cenderung ke salah satu sisi, entry range, TP, SL, risk/reward, tombol Trade with Bot — modal konfirmasi menampilkan Market, **Arah** (BUY/Long – SELL/Short), **Leverage** (Futures), serta baris **Take Profit / Potensi Profit** dan **Stop Loss / Potensi Loss** dengan format `harga TP/SL / nilai PnL (USDT & %)`; tersedia input **Reward (USDT)** & **Risk (USDT)** (opsional) — bila diisi, harga TP/SL dihitung dari nominal tersebut, bila kosong memakai TP/SL rekomendasi bot).
-- **Market Analysis** (lebar penuh, di bawah Chart) — ditampilkan langsung tanpa klik, **2 kolom berdampingan**: **Current Situation** (tren per timeframe, gauge Trend Bias/RSI/Momentum, ringkasan) dan **Prediction** (BUY vs SELL bar, outlook/confidence, entry, TP, SL, R/R, visual level SL→Entry→TP, teks prediksi).
+- **Market Analysis** (lebar penuh, di bawah Chart) — ditampilkan langsung tanpa klik, **2 kolom berdampingan**: **Current Situation** (tren per timeframe, gauge Trend Bias/RSI/Momentum, ringkasan) dan **Prediction** (BUY vs SELL bar, outlook/confidence, entry, TP, SL, R/R, visual level SL→Entry→TP, teks prediksi), plus **Liquidation Heatmap** (Binance): tombol **Muat** + pilihan range (`12h`/`24h`/`3d`/`7d`/`30d`), menampilkan cluster likuidasi nyata per level harga dengan porsi **Long liq (merah)** vs **Short liq (hijau)**.
 - **Manual Order** (kolom kanan, di bawah Bot Recommendation) — form Market/Action (Long/Short/Close/Stop), Ticker, Amount, Amount Type, **Margin (Cross/Isolated, Futures)**, Price entry (opsional), **Leverage** (khusus Futures), dan **Take Profit / Stop Loss dalam USDT**. Harga TP/SL **dihitung otomatis** (tidak ada input harga manual), ditampilkan sebagai `harga TP/SL / nilai PnL (USDT & %)` di preview dan modal konfirmasi; aksi **Stop** memakai trigger otomatis dari target Stop Loss. Tombol Place Order mengirim order via `/api/order` setelah konfirmasi.
 - **Peringatan otomatis**: bila harga Stop Loss melewati estimasi harga likuidasi (dari posisi terbuka atau `entry × leverage`), modal Trade with Bot / Manual Order menampilkan peringatan risiko likuidasi sebelum SL.
 
@@ -61,6 +61,7 @@ Endpoint internal (semua butuh secret):
 - `DELETE /api/orders?profile=&id=&symbol=` — batalkan order di Binance (`cancelOrder`).
 - `GET /api/candles?profile=&market=&symbol=&timeframe=&fast=&slow=&trend=&limit=&dip=&rsi=&rsiPeriod=&rsiOversold=&rsiOverbought=` — candle + MA + RSI + marker + analisa.
 - `GET /api/trends?profile=&market=&symbol=&timeframes=&fast=&slow=&trend=` — trend multi-timeframe + rekomendasi aksi. `timeframes` opsional (default `5m,15m,1h,4h,1d`).
+- `GET /api/liquidation?symbol=&range=` — Liquidation Heatmap dari **stream likuidasi Binance** (gratis, real-time sejak service berjalan). `range`: `12h`/`24h`/`3d`/`7d`/`30d`.
 - `GET /api/stream?secret=&profile=&market=&interval=&scope=` — Server-Sent Events saldo & posisi. `scope` = `balance`/`positions`/`both` (default `both`).
 - `POST /api/order` — order (sama seperti `/webhook`).
 
@@ -256,6 +257,7 @@ Catatan: config sudah menonaktifkan buffering pada `/api/stream` agar **SSE** (s
 - Order long/short futures memakai market order (kecuali `price` diisi).
 - `setLeverage` / `setMarginMode` diabaikan jika exchange tidak mendukung.
 - Perhitungan amount memakai presisi exchange (`amountToPrecision`).
+- **Liquidation Heatmap**: memakai **stream likuidasi Binance** (`wss://fstream.binance.com/ws/!forceOrder@arr`, gratis, tanpa API key) via WebSocket — data terkumpul sejak service dijalankan (retensi 7 hari).
 
 ## Troubleshooting
 

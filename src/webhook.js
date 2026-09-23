@@ -8,6 +8,7 @@ import { getExchange, getProfile, marketAllowed, normalizeMarket } from './excha
 import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
 import { describeError } from './errors.js';
 import { listPairs, addPair, removePair, previewPair } from './watchlist.js';
+import { startLiquidationStream, liquidationMap } from './liquidations.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -401,6 +402,21 @@ export function startWebhookServer() {
         return;
       }
 
+      if (req.method === 'GET' && path === '/api/liquidation') {
+        if (!secretValid(config, req, url, null)) {
+          sendJson(res, 401, { ok: false, error: 'invalid secret' });
+          return;
+        }
+        const ticker = url.searchParams.get('symbol') || url.searchParams.get('ticker') || '';
+        const symbol = String(ticker).split(':')[0].toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const range = url.searchParams.get('range') || '3d';
+        const ranges = { '12h': 12, '24h': 24, '3d': 72, '7d': 168, '30d': 720 };
+        const rangeMs = (ranges[range] || 72) * 60 * 60 * 1000;
+        const map = liquidationMap(symbol, rangeMs);
+        sendJson(res, 200, { ok: true, source: 'binance', symbol, range, ...map });
+        return;
+      }
+
       if (req.method === 'GET' && path === '/api/stream') {
         if (!secretValid(config, req, url, null)) {
           sendJson(res, 401, { ok: false, error: 'invalid secret' });
@@ -518,6 +534,7 @@ export function startWebhookServer() {
   server.listen(port, host, () => {
     logger.info(`Webhook listening on http://${host}:${port}/webhook (dashboard: /dashboard, health: /health)`);
     checkClock(config);
+    startLiquidationStream();
   });
 
   const shutdown = () => {
