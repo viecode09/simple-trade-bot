@@ -312,6 +312,34 @@
       <div class="cell"><div class="k">Today's PnL</div><div class="v" id="balPnl">-</div><div class="s" id="balPnlPct">-</div></div>
     </section>
 
+    <section class="card positions">
+      <div class="p-head">
+        <div class="tabs">
+          <button class="tab active" data-tab="positions">Positions</button>
+          <button class="tab" data-tab="orders">Open Orders</button>
+        </div>
+        <span id="posMsg" class="muted" style="font-size:11px; margin-left:auto"></span>
+      </div>
+      <div id="tabPositions">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>Liq. Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
+            <tbody id="posRows"></tbody>
+          </table>
+        </div>
+        <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
+      </div>
+      <div id="tabOrders" class="hidden">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="ordRows"></tbody>
+          </table>
+        </div>
+        <div id="ordEmpty" class="empty-state hidden"><div class="big">Belum ada open order</div><div>Order terbuka (limit/TP/SL) akan muncul di sini.</div></div>
+      </div>
+    </section>
+
     <section class="workspace">
       <div class="card chart-card">
         <div class="pair-head">
@@ -397,33 +425,6 @@
       <div id="marketAnalysis" class="detail-grid"></div>
     </section>
 
-    <section class="card positions">
-      <div class="p-head">
-        <div class="tabs">
-          <button class="tab active" data-tab="positions">Positions</button>
-          <button class="tab" data-tab="orders">Open Orders</button>
-        </div>
-        <span id="posMsg" class="muted" style="font-size:11px; margin-left:auto"></span>
-      </div>
-      <div id="tabPositions">
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Pair</th><th>Side</th><th>Entry Price</th><th>Mark Price</th><th>Liq. Price</th><th>PnL</th><th>Risk</th><th>Recommendation</th><th>Action</th></tr></thead>
-            <tbody id="posRows"></tbody>
-          </table>
-        </div>
-        <div id="posEmpty" class="empty-state hidden"><div class="big">Belum ada posisi terbuka</div><div>Posisi aktif akan muncul di sini.</div></div>
-      </div>
-      <div id="tabOrders" class="hidden">
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Pair</th><th>Type</th><th>Side</th><th>Trigger / Price</th><th>Amount</th><th>Filled</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="ordRows"></tbody>
-          </table>
-        </div>
-        <div id="ordEmpty" class="empty-state hidden"><div class="big">Belum ada open order</div><div>Order terbuka (limit/TP/SL) akan muncul di sini.</div></div>
-      </div>
-    </section>
   </main>
 
   <div id="sidebarBackdrop" class="backdrop hidden"></div>
@@ -1194,13 +1195,7 @@ $('modalRoot').addEventListener('click', e => {
     localStorage.setItem('stb_secret', state.secret);
     closeModal();
     toast('Settings disimpan', 'ok');
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
-}
-
-bootstrap();
+    bootstrap();
   }
 });
 
@@ -1251,8 +1246,12 @@ function confirmTrade(side, pair, posSide, execTicker) {
     <div class="m-body">
       <div class="kv"><span class="k">Pair</span><span class="v">${pair}</span></div>
       <div class="kv"><span class="k">Market</span><span class="v">${state.market.toUpperCase()}</span></div>
-      <div class="kv"><span class="k">Aksi</span><span class="v">${isClose ? 'CLOSE ' + String(posSide || '').toUpperCase() : action.toUpperCase()}</span></div>
+      <div class="kv"><span class="k">Aksi</span><span class="v" id="twAction">${isClose ? 'CLOSE ' + String(posSide || '').toUpperCase() : (action === 'short' ? 'SHORT (SELL)' : 'LONG (BUY)')}</span></div>
       ${levRow}
+      ${isClose ? '' : `<div class="field"><label>Arah</label><select id="twSide">
+        <option value="long" ${action === 'long' ? 'selected' : ''}>BUY / Long</option>
+        <option value="short" ${action === 'short' ? 'selected' : ''}>SELL / Short</option>
+      </select></div>`}
       <div class="kv"><span class="k">Entry</span><span class="v">${rec.entryLow != null ? fmtPrice(rec.entryLow) + ' - ' + fmtPrice(rec.entryHigh) : '-'}</span></div>
       ${plRows}
       ${isClose ? '' : '<div class="field"><label>Amount (USDT)</label><input id="tradeAmount" type="number" value="10"></div>'}
@@ -1269,6 +1268,16 @@ function confirmTrade(side, pair, posSide, execTicker) {
       const el = $(id);
       if (el) el.oninput = updatePotentialPL;
     });
+    const sideEl = $('twSide');
+    if (sideEl) {
+      sideEl.onchange = () => {
+        const a = sideEl.value;
+        state.pendingPL.dir = a === 'short' ? -1 : 1;
+        const actionEl = $('twAction');
+        if (actionEl) actionEl.textContent = a === 'short' ? 'SHORT (SELL)' : 'LONG (BUY)';
+        updatePotentialPL();
+      };
+    }
     updatePotentialPL();
   }
 }
@@ -1345,7 +1354,13 @@ async function executeOrder(body) {
 
 async function executePending() {
   const p = state.pending || {};
-  const prices = p.action === 'long' || p.action === 'short' ? tradePricesFromModal() : { amount: ($('tradeAmount') ? Number($('tradeAmount').value) : undefined) };
+  const sideEl = $('twSide');
+  const action = sideEl ? sideEl.value : p.action;
+  if (action === 'long' || action === 'short') {
+    state.pendingPL = state.pendingPL || {};
+    state.pendingPL.dir = action === 'short' ? -1 : 1;
+  }
+  const prices = action === 'long' || action === 'short' ? tradePricesFromModal() : { amount: ($('tradeAmount') ? Number($('tradeAmount').value) : undefined) };
   const amount = prices.amount;
   closeModal();
   if (p.action !== 'close' && !amount) { toast('Amount wajib diisi', 'err'); return; }
@@ -1353,11 +1368,11 @@ async function executePending() {
     profile: state.profile,
     market: p.market,
     ticker: p.ticker,
-    action: p.action,
-    amount: p.action === 'close' ? undefined : amount,
+    action,
+    amount: action === 'close' ? undefined : amount,
     amountType: p.amountType
   };
-  if (p.action === 'long' || p.action === 'short') {
+  if (action === 'long' || action === 'short') {
     if (prices.tpPrice != null) body.takeProfit = prices.tpPrice;
     if (prices.slPrice != null) body.stopLoss = prices.slPrice;
   }
@@ -1503,6 +1518,12 @@ async function bootstrap() {
     toast(e.message, 'err');
     $('favList').innerHTML = '<div class="empty">Gagal memuat. Periksa secret/settings.</div>';
   }
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
 }
 
 bootstrap();
