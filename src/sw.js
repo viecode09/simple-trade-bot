@@ -1,4 +1,4 @@
-const CACHE = 'simple-trade-bot-v1';
+const CACHE = 'simple-trade-bot-v2';
 const ASSETS = [
   '/',
   '/dashboard',

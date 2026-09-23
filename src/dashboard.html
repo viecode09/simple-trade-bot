@@ -133,10 +133,22 @@
 
   /* Main */
   .main { grid-area: main; overflow-y: auto; padding: 18px 20px 40px; }
+  .main > * { margin-bottom: 16px; }
+  .main > *:last-child { margin-bottom: 0; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+  .card:not([data-card="balance"]), [data-card="workspace"] { position: relative; }
+  .drag-handle {
+    position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; z-index: 6;
+    display: grid; place-items: center; background: transparent; border: 0; border-radius: 6px;
+    color: var(--muted); cursor: grab; font-size: 14px; line-height: 1; padding: 0;
+  }
+  .drag-handle:hover { color: var(--text); background: var(--panel-2); }
+  .drag-handle:active { cursor: grabbing; }
+  [data-card].dragging { opacity: .45; }
+  [data-card].drop-target { outline: 2px dashed var(--yellow); outline-offset: -2px; }
 
   /* Balance summary */
-  .balance { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); margin-bottom: 16px; overflow: hidden; border-radius: var(--radius); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+  .balance { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); overflow: hidden; border-radius: var(--radius); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
   .balance .cell { background: var(--panel); padding: 14px 18px; }
   .balance .cell .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
   .balance .cell .v { font-size: 20px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -187,7 +199,6 @@
   .ai-box { margin-top: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: #c8cdd3; line-height: 1.55; font-size: 12px; }
 
   /* Positions */
-  .positions { margin-top: 16px; }
   .positions .p-head { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
   .positions .p-head h3 { margin: 0; flex: 1; font-size: 13px; }
   .tabs { display: flex; gap: 4px; }
@@ -305,14 +316,14 @@
     <div class="sb-foot"><button id="addFavBtn" class="btn block">+ Add Favorite</button></div>
   </aside>
 
-  <main class="main">
-    <section class="balance card">
+  <main class="main" id="mainSort">
+    <section class="balance card" data-card="balance">
       <div class="cell"><div class="k">Total Balance</div><div class="v" id="balTotal">-</div><div class="s" id="balTotalSub">USDT</div></div>
       <div class="cell"><div class="k">Available Balance</div><div class="v" id="balFree">-</div><div class="s">USDT</div></div>
       <div class="cell"><div class="k">Today's PnL</div><div class="v" id="balPnl">-</div><div class="s" id="balPnlPct">-</div></div>
     </section>
 
-    <section class="card positions">
+    <section class="card positions" data-card="positions">
       <div class="p-head">
         <div class="tabs">
           <button class="tab active" data-tab="positions">Positions</button>
@@ -340,7 +351,7 @@
       </div>
     </section>
 
-    <section class="workspace">
+    <section class="workspace" data-card="workspace">
       <div class="card chart-card">
         <div class="pair-head">
           <div class="pc-name">
@@ -376,8 +387,8 @@
         <div id="chart"></div>
       </div>
 
-      <div class="side-col">
-        <div class="card panel rec">
+      <div class="side-col" id="sideSort">
+        <div class="card panel rec" data-card="rec">
           <h3>Bot Recommendation</h3>
           <div class="bs-head">
             <span class="up">BUY <b id="buyPct">-</b></span>
@@ -392,7 +403,7 @@
           <button class="btn primary block" id="tradeBtn">Trade with Bot</button>
         </div>
 
-        <div class="card panel manual">
+        <div class="card panel manual" data-card="manual">
           <h3>Manual Order</h3>
           <div class="grid2">
             <div class="field"><label>Market</label><select id="moMarket"><option value="spot">Spot</option><option value="future" selected>Futures</option></select></div>
@@ -420,7 +431,7 @@
       </div>
     </section>
 
-    <section class="card panel analysis-inline">
+    <section class="card panel analysis-inline" data-card="analysis">
       <h3>Market Analysis</h3>
       <div id="marketAnalysis" class="detail-grid"></div>
     </section>
@@ -1525,6 +1536,75 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+
+function dragAfterElement(container, y) {
+  const els = [...container.querySelectorAll(':scope > [data-card]:not(.dragging)')];
+  return els.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) return { offset, element: child };
+    return closest;
+  }, { offset: -Infinity, element: null }).element;
+}
+
+function saveCardOrder(container) {
+  const order = [...container.querySelectorAll(':scope > [data-card]')].map(el => el.dataset.card);
+  try { localStorage.setItem('stb_order_' + container.id, JSON.stringify(order)); } catch { /* ignore */ }
+}
+
+function applyCardOrder(container) {
+  let order = [];
+  try { order = JSON.parse(localStorage.getItem('stb_order_' + container.id) || '[]'); } catch { order = []; }
+  if (!Array.isArray(order) || !order.length) return;
+  order.forEach(name => {
+    const el = container.querySelector(':scope > [data-card="' + name + '"]');
+    if (el) container.appendChild(el);
+  });
+}
+
+function setupSortable(container) {
+  if (!container) return;
+  applyCardOrder(container);
+
+  container.querySelectorAll(':scope > [data-card]').forEach(card => {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'drag-handle';
+    handle.title = 'Geser';
+    handle.textContent = '⠿';
+    handle.addEventListener('mousedown', () => card.setAttribute('draggable', 'true'));
+    handle.addEventListener('touchstart', () => card.setAttribute('draggable', 'true'), { passive: true });
+    card.appendChild(handle);
+
+    card.addEventListener('dragstart', e => {
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', card.dataset.card); } catch { /* ignore */ }
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      card.removeAttribute('draggable');
+      container.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+      saveCardOrder(container);
+    });
+  });
+
+  container.addEventListener('dragover', e => {
+    const dragging = container.querySelector(':scope > [data-card].dragging');
+    if (!dragging) return;
+    e.preventDefault();
+    const after = dragAfterElement(container, e.clientY);
+    if (after == null) container.appendChild(dragging);
+    else container.insertBefore(dragging, after);
+  });
+
+  document.addEventListener('mouseup', () => {
+    container.querySelectorAll('[data-card][draggable="true"]').forEach(el => el.removeAttribute('draggable'));
+  });
+}
+
+setupSortable($('mainSort'));
+setupSortable($('sideSort'));
 
 bootstrap();
 </script>
