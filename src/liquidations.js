@@ -10,6 +10,8 @@ const store = new Map();
 let socket = null;
 let started = false;
 let reconnectTimer = null;
+let lastError = null;
+let attempts = 0;
 
 function record(symbol, side, price, usd, ts) {
   let arr = store.get(symbol);
@@ -32,7 +34,11 @@ function connect() {
     return;
   }
 
-  socket.on('open', () => logger.info('Liquidation stream (Binance !forceOrder@arr) connected'));
+  socket.on('open', () => {
+    lastError = null;
+    attempts = 0;
+    logger.info('Liquidation stream (Binance !forceOrder@arr) connected');
+  });
 
   socket.on('message', raw => {
     try {
@@ -56,17 +62,20 @@ function connect() {
   });
 
   socket.on('error', e => {
-    logger.warn(`Liquidation stream error: ${e.message || e}`);
+    lastError = e.message || String(e);
+    logger.warn(`Liquidation stream error: ${lastError}`);
     try { socket.close(); } catch { /* ignore */ }
   });
 }
 
 function scheduleReconnect() {
   if (reconnectTimer) return;
+  attempts += 1;
+  const delay = Math.min(60000, RECONNECT_MS * (2 ** Math.min(attempts - 1, 4)));
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
-  }, RECONNECT_MS);
+  }, delay);
 }
 
 export function startLiquidationStream() {
@@ -76,7 +85,7 @@ export function startLiquidationStream() {
 }
 
 export function liquidationStatus() {
-  return { connected: Boolean(socket && socket.readyState === 1), symbols: store.size };
+  return { connected: Boolean(socket && socket.readyState === 1), symbols: store.size, lastError };
 }
 
 function bucketStep(price) {

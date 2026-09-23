@@ -1026,7 +1026,11 @@ function renderBinanceLiquidation(res, range) {
   if (!content) return;
   const clusters = res.clusters || [];
   if (!clusters.length) {
-    content.innerHTML = `<div class="muted">Belum ada likuidasi Binance terbaru untuk ${res.symbol} (${range}). Stream mulai terkumpul sejak service dinyalakan.</div>`;
+    const st = res.stream || {};
+    const note = st.connected
+      ? 'Stream Binance terhubung — menunggu likuidasi masuk.'
+      : `Stream Binance BELUM terhubung${st.lastError ? ' (' + st.lastError + ')' : ''}. Cek jaringan/firewall server ke fstream.binance.com.`;
+    content.innerHTML = `<div class="muted">Belum ada likuidasi Binance terbaru untuk ${res.symbol} (${range}). ${note}</div>`;
     return;
   }
   const max = clusters[0].usd || 1;

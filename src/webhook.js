@@ -8,7 +8,7 @@ import { getExchange, getProfile, marketAllowed, normalizeMarket } from './excha
 import { buildChart, MA_DEFAULTS, buildTrendReport, TREND_TIMEFRAMES } from './strategy.js';
 import { describeError } from './errors.js';
 import { listPairs, addPair, removePair, previewPair } from './watchlist.js';
-import { startLiquidationStream, liquidationMap } from './liquidations.js';
+import { startLiquidationStream, liquidationMap, liquidationStatus } from './liquidations.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -413,7 +413,7 @@ export function startWebhookServer() {
         const ranges = { '12h': 12, '24h': 24, '3d': 72, '7d': 168, '30d': 720 };
         const rangeMs = (ranges[range] || 72) * 60 * 60 * 1000;
         const map = liquidationMap(symbol, rangeMs);
-        sendJson(res, 200, { ok: true, source: 'binance', symbol, range, ...map });
+        sendJson(res, 200, { ok: true, source: 'binance', symbol, range, stream: liquidationStatus(), ...map });
         return;
       }
 
